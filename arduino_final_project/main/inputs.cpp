@@ -1,12 +1,4 @@
-/**
- * This file store all inputs gate to the game.
- */
-
-struct joystickPosition {
-    /* Represent the result output of a joystick */
-    float x; // x is the left - right value
-    float y; // y is the top - bottom value
-};
+#include "inputs.hpp"
 
 joystickPosition get_joystick_position() {
     /* Retrieve joystick position */

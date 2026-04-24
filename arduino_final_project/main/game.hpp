@@ -1,5 +1,9 @@
-#include <cstdint> // For uint8_t
-#include "inputs.cpp"
+#pragma once
+#include "inputs.hpp"
+#include <Arduino.h> // For uint8_t type
+
+#define GAME_GRID_X_AXIS_LEN 28
+#define GAME_GRID_Y_AXIS_LEN 36
 
 enum CellBackgroundType {
     BG_EMPTY=0,
@@ -53,17 +57,47 @@ struct Cell {
     inline CellEntitiesType getEntity() const {
         return (CellEntitiesType)((data >> 2) & 0b00000111);
     }
+
+    // Convert cell type to a char value which can be print using Serial.print(Cell.toChar())
+    inline char toChar() const {
+        switch (getEntity()) {
+            case ENT_PACMAN:      return 'P';
+            case ENT_RED_GHOST:   return 'R';
+            case ENT_BLUE_GHOST:  return 'B';
+            case ENT_PINK_GHOST:  return 'K';
+            case ENT_ORANGE_GHOST:return 'O';
+            case ENT_FRUIT:       return 'F';
+            default: break;
+        }
+        switch (getBackground()) {
+            case BG_WALL:         return '#';
+            case BG_GUM:          return '.';
+            case BG_ENERGIZE:     return '*';
+            default:              return ' ';
+        }
+    }
 };
 
 struct gameState {
     unsigned long tick;
-    Cell grid[28][36]; // Official grid size from the first game
+    Cell grid[GAME_GRID_X_AXIS_LEN][GAME_GRID_Y_AXIS_LEN]; // Official grid size from the first game
+
+    gameState() : tick(0) {
+        // Initialize the grid with empty cells
+        for (int x = 0; x < GAME_GRID_X_AXIS_LEN; x++) {
+            for (int y = 0; y < GAME_GRID_Y_AXIS_LEN; y++) {
+                grid[x][y] = Cell{0}; // Default constructor sets data to 0
+            }
+        }
+    }
+
 };
 
 
 class Game {
 private:
     gameState state;
+    inputs currentInputs;
 
     // Computing functions called each step
     void computePacmanPosition();
@@ -77,10 +111,10 @@ public:
     ~Game();
 
     void start(); /* Start a new game */
-    gameState* step(); /* Step from one new frame */
-    void registerInputs(joystickPosition joystickPos, bool isStartPressed, bool isSelectPressed);
+    gameState& step(); /* Step from one new frame */
+    void registerInputs(inputs &newInputs);
 
     // Level information retrieve
-    gameState loadLevel(uint8_t level);
+    void loadLevel(uint8_t level);
 
 };

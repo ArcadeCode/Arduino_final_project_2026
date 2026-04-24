@@ -1,7 +1,9 @@
-#include "game.hpp"
+#pragma once
 
-class Screen
-{
+#include "game.hpp"
+#include <Arduino.h>
+
+class Screen {
 private:
     /* data */
 public:
@@ -10,3 +12,4 @@ public:
 
     void print_frame(gameState &state);
 };
+

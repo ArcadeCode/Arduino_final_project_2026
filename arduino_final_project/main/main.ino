@@ -1,24 +1,24 @@
-#include "game.cpp"
-#include "inputs.cpp"
-#include "outputs.cpp"
+#include "game.hpp"
+#include "inputs.hpp"
+#include "screen.hpp"
+
+Game game;
+Screen screen;
 
 void setup() {
-    Game game = Game();
-    Screen screen = Screen();
     game.start();
 }
 
 void loop() {
-    // 1. Calculating new game step
+    // 1. Calculating new game state
     gameState state = game.step();
 
-    // 2. 
-    screen.print_frame(state)
+    // 2. Sending state to the output Screen
+    screen.print_frame(state);
 
-
-    game.registerInputs(
-        get_joystick_position(),
-        start_btn_is_pressed(),
-        select_btn_is_pressed
-    )
+    // 3. Here the user saw a game state and react
+    // We register his inputs directly into the Game
+    // object
+    inputs newInputs = inputs(); // Default constructor will retrieve the current inputs state
+    game.registerInputs(newInputs);
 }
