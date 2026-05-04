@@ -87,6 +87,7 @@ struct gameState {
         // Initialize the grid with empty cells (0b00000000) which is BG_EMPTY + ENT_EMPTY
         // We use memset which is fastest to initialize a grid of Cell.
         memset(grid, 0, sizeof(grid));
+    }
 };
 
 
