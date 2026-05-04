@@ -70,10 +70,11 @@ struct Cell {
             default: break;
         }
         switch (getBackground()) {
-            case BG_WALL:         return '#';
-            case BG_GUM:          return '.';
-            case BG_ENERGIZE:     return '*';
-            default:              return ' ';
+            case BG_WALL:     return '#';
+            case BG_GUM:      return '.';
+            case BG_ENERGIZE: return '*';
+            case BG_EMPTY:    return ' ';
+            default:          return '?';
         }
     }
 };
@@ -83,14 +84,9 @@ struct gameState {
     Cell grid[GAME_GRID_X_AXIS_LEN][GAME_GRID_Y_AXIS_LEN]; // Official grid size from the first game
 
     gameState() : tick(0) {
-        // Initialize the grid with empty cells
-        for (int x = 0; x < GAME_GRID_X_AXIS_LEN; x++) {
-            for (int y = 0; y < GAME_GRID_Y_AXIS_LEN; y++) {
-                grid[x][y] = Cell{0}; // Default constructor sets data to 0
-            }
-        }
-    }
-
+        // Initialize the grid with empty cells (0b00000000) which is BG_EMPTY + ENT_EMPTY
+        // We use memset which is fastest to initialize a grid of Cell.
+        memset(grid, 0, sizeof(grid));
 };
 
 
@@ -116,5 +112,4 @@ public:
 
     // Level information retrieve
     void loadLevel(uint8_t level);
-
 };
