@@ -16,7 +16,11 @@ from enum import IntEnum
 
 GRID_W = 28   # GAME_GRID_X_AXIS_LEN
 GRID_H = 36   # GAME_GRID_Y_AXIS_LEN
-CELL_SIZE = 18  # px par cellule dans l'éditeur
+
+CELL_SIZE_MIN  =  6   # px minimum par cellule
+CELL_SIZE_DEFAULT = 18
+CELL_SIZE_MAX  = 48   # px maximum par cellule
+ZOOM_STEP      =  2   # incrément de zoom
 
 # ─── Enums identiques au C++ ─────────────────────────────────────────────────
 
@@ -230,7 +234,10 @@ class PacManEditor(tk.Tk):
         super().__init__()
         self.title("Pac-Man Level Editor — Arduino")
         self.configure(bg="#0A0A1A")
-        self.resizable(False, False)
+        self.resizable(True, True)
+        self.minsize(700, 500)
+
+        self.cell_size: int = CELL_SIZE_DEFAULT
 
         self.grid_data: List[List[Cell]] = empty_grid()
         self.selected_bg  = BG.WALL
@@ -270,9 +277,23 @@ class PacManEditor(tk.Tk):
             tk.Button(toolbar, text=label, command=cmd, **btn_style).pack(
                 side=tk.LEFT, padx=3)
 
+        # Séparateur + contrôles zoom
+        tk.Label(toolbar, text="│", fg="#333366", bg="#111130",
+                 font=("Courier", 14)).pack(side=tk.LEFT, padx=4)
+        tk.Button(toolbar, text="🔍−", command=self._zoom_out,
+                  **btn_style).pack(side=tk.LEFT, padx=2)
+        self.zoom_label = tk.Label(toolbar, text=f"{CELL_SIZE_DEFAULT}px",
+                                   font=("Courier", 9, "bold"),
+                                   fg="#FFD700", bg="#111130", width=5)
+        self.zoom_label.pack(side=tk.LEFT)
+        tk.Button(toolbar, text="🔍+", command=self._zoom_in,
+                  **btn_style).pack(side=tk.LEFT, padx=2)
+        tk.Button(toolbar, text="⟳", command=self._zoom_reset,
+                  **btn_style).pack(side=tk.LEFT, padx=2)
+
         # Corps principal
         body = tk.Frame(self, bg="#0A0A1A")
-        body.pack(fill=tk.BOTH, padx=8, pady=8)
+        body.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
         # Panneau gauche : palette + stats
         left = tk.Frame(body, bg="#0A0A1A", width=160)
@@ -281,24 +302,44 @@ class PacManEditor(tk.Tk):
         self._build_palette(left)
         self._build_stats(left)
 
-        # Canvas de la grille
-        canvas_frame = tk.Frame(body, bg="#111130", bd=2, relief=tk.SUNKEN)
-        canvas_frame.pack(side=tk.LEFT)
+        # Canvas de la grille (scrollable, expansible)
+        canvas_outer = tk.Frame(body, bg="#111130", bd=2, relief=tk.SUNKEN)
+        canvas_outer.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        canvas_outer.rowconfigure(0, weight=1)
+        canvas_outer.columnconfigure(0, weight=1)
 
         self.canvas = tk.Canvas(
-            canvas_frame,
-            width=GRID_W * CELL_SIZE,
-            height=GRID_H * CELL_SIZE,
+            canvas_outer,
             bg="#0A0A1A", highlightthickness=0, cursor="crosshair"
         )
-        self.canvas.pack()
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+
+        vbar = tk.Scrollbar(canvas_outer, orient=tk.VERTICAL,
+                            command=self.canvas.yview,
+                            bg="#111130", troughcolor="#080818")
+        vbar.grid(row=0, column=1, sticky="ns")
+        hbar = tk.Scrollbar(canvas_outer, orient=tk.HORIZONTAL,
+                            command=self.canvas.xview,
+                            bg="#111130", troughcolor="#080818")
+        hbar.grid(row=1, column=0, sticky="ew")
+        self.canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
+
+        # Bindings souris
         self.canvas.bind("<Button-1>",        self._on_press)
         self.canvas.bind("<B1-Motion>",       self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
         self.canvas.bind("<Button-3>",        self._on_rclick)
         self.canvas.bind("<B3-Motion>",       self._on_rdrag)
         self.canvas.bind("<ButtonRelease-3>", self._on_release)
-        self.canvas.bind("<Motion>", self._on_hover)
+        self.canvas.bind("<Motion>",          self._on_hover)
+        # Zoom Ctrl+Molette
+        self.canvas.bind("<Control-MouseWheel>", self._on_ctrl_wheel)   # Windows/Mac
+        self.canvas.bind("<Control-Button-4>",   lambda e: self._zoom_in())   # Linux ↑
+        self.canvas.bind("<Control-Button-5>",   lambda e: self._zoom_out())  # Linux ↓
+        # Scroll sans Ctrl
+        self.canvas.bind("<MouseWheel>",  self._on_mousewheel_scroll)
+        self.canvas.bind("<Button-4>",    lambda e: self.canvas.yview_scroll(-1, "units"))
+        self.canvas.bind("<Button-5>",    lambda e: self.canvas.yview_scroll( 1, "units"))
 
         # Panneau droite : export/import
         right = tk.Frame(body, bg="#0A0A1A", width=320)
@@ -440,7 +481,10 @@ class PacManEditor(tk.Tk):
 
     def _refresh_canvas(self):
         self.canvas.delete("all")
-        cs = CELL_SIZE
+        cs = self.cell_size
+        total_w = GRID_W * cs
+        total_h = GRID_H * cs
+        self.canvas.configure(scrollregion=(0, 0, total_w, total_h))
         for x in range(GRID_W):
             for y in range(GRID_H):
                 cell = self.grid_data[x][y]
@@ -449,30 +493,30 @@ class PacManEditor(tk.Tk):
                 x1, y1 = x0 + cs, y0 + cs
                 self.canvas.create_rectangle(x0, y0, x1, y1,
                                              fill=fill, outline="#0D0D20", width=1)
-                if sym:
+                if sym and cs >= 10:
                     self.canvas.create_text(
                         x0 + cs // 2, y0 + cs // 2,
                         text=sym, fill="#FFFFFF",
                         font=("Courier", max(7, cs - 8), "bold")
                     )
-        # Grille de guidage légère
+        # Grille de guidage légère (tous les 4 blocs)
         for x in range(0, GRID_W + 1, 4):
-            self.canvas.create_line(x * cs, 0, x * cs, GRID_H * cs,
+            self.canvas.create_line(x * cs, 0, x * cs, total_h,
                                     fill="#1A1A35", width=1)
         for y in range(0, GRID_H + 1, 4):
-            self.canvas.create_line(0, y * cs, GRID_W * cs, y * cs,
+            self.canvas.create_line(0, y * cs, total_w, y * cs,
                                     fill="#1A1A35", width=1)
         self._update_stats()
 
     def _redraw_cell(self, x: int, y: int):
-        cs = CELL_SIZE
+        cs = self.cell_size
         cell = self.grid_data[x][y]
         fill, sym, _ = cell_visual(cell)
         x0, y0 = x * cs, y * cs
         x1, y1 = x0 + cs, y0 + cs
         self.canvas.create_rectangle(x0, y0, x1, y1,
                                      fill=fill, outline="#0D0D20", width=1)
-        if sym:
+        if sym and cs >= 10:
             self.canvas.create_text(
                 x0 + cs // 2, y0 + cs // 2, text=sym,
                 fill="#FFFFFF", font=("Courier", max(7, cs - 8), "bold")
@@ -481,11 +525,46 @@ class PacManEditor(tk.Tk):
     # ── Événements souris ────────────────────────────────────────────────────
 
     def _canvas_to_cell(self, event):
-        x = event.x // CELL_SIZE
-        y = event.y // CELL_SIZE
+        # Tenir compte du scroll du canvas
+        cx = self.canvas.canvasx(event.x)
+        cy = self.canvas.canvasy(event.y)
+        x = int(cx) // self.cell_size
+        y = int(cy) // self.cell_size
         if 0 <= x < GRID_W and 0 <= y < GRID_H:
             return x, y
         return None, None
+
+    def _on_mousewheel_scroll(self, event):
+        """Scroll vertical sans Ctrl (Windows/Mac)"""
+        delta = -1 if event.delta > 0 else 1
+        self.canvas.yview_scroll(delta, "units")
+
+    # ── Zoom ─────────────────────────────────────────────────────────────────
+
+    def _zoom_in(self, event=None):
+        if self.cell_size < CELL_SIZE_MAX:
+            self.cell_size = min(self.cell_size + ZOOM_STEP, CELL_SIZE_MAX)
+            self._apply_zoom()
+
+    def _zoom_out(self, event=None):
+        if self.cell_size > CELL_SIZE_MIN:
+            self.cell_size = max(self.cell_size - ZOOM_STEP, CELL_SIZE_MIN)
+            self._apply_zoom()
+
+    def _zoom_reset(self, event=None):
+        self.cell_size = CELL_SIZE_DEFAULT
+        self._apply_zoom()
+
+    def _on_ctrl_wheel(self, event):
+        """Ctrl+Molette = zoom (Windows/Mac)"""
+        if event.delta > 0:
+            self._zoom_in()
+        else:
+            self._zoom_out()
+
+    def _apply_zoom(self):
+        self.zoom_label.configure(text=f"{self.cell_size}px")
+        self._refresh_canvas()
 
     def _on_press(self, event):
         self._push_history()
