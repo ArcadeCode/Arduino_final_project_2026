@@ -2,7 +2,7 @@
 #include "inputs.hpp"
 #include "screen.hpp"
 
-#include <Arduino.h>
+#include <Arduino.h> // Only for the freeMemory function
 
 int freeMemory() {
   extern char *__brkval;
@@ -13,74 +13,58 @@ int freeMemory() {
   return &top - (__brkval == 0 ? &__heap_start : __brkval);
 }
 
-// We done that for heap allocation
-Game* game = nullptr; // Variable globale
+// We done that for future heap allocation in setup()
+Game* game = nullptr;
 Screen* screen = nullptr;
 
 void setup() {
     Serial.begin(19200);
-    delay(2000);
-
     Serial.println("BOOT OK");
 
-    game = new Game();
+    game = new Game(); // Allocation on the heap
     Serial.println("Game allocated");
 
-
-    game->start();
+    game->start(); // Construct gameState 0 and put dummy values in each entities positions
     Serial.println("Game started");
 
-    game->loadLevel(0);
+    game->loadLevel(0); // Load debug level
 
-    screen = new Screen();
+    screen = new Screen(); // Allocation on the heap
     Serial.println("Screen allocated");
 }
 
 void loop() {
-    // 1. Calculating new game state
+    /// 1. CALCULATING NEW GAME STATE ///
     gameState& state = game->step();
 
-    // 2. Sending state to the output Screen
+    /// 2. SENDING STATE TO THE OUTPUT SCREEN ///
     screen->print_frame(state);
 
-    // 2.1 Debuging informations
-    Serial.print("Tick : ");
-    Serial.println(state.tick);
+    // 2.1 Debugging informations
+    //  printPos is a lambda function for cleanup the debug texts.
+    auto printPos = [](const char* name, GridPosition pos) {
+        char buf[40]; // Represent a string
+        // snprintf is a usefull function who write a formatted string on a buffer,
+        // cannot overwrite sizeof(buffer) so really usefull.
+        snprintf(buf, sizeof(buf), "%s: (%d, %d)", name, pos.x, pos.y);
+        Serial.println(buf); // Send the output as a string
+    };
 
-    Serial.print("Pacman position : (");
-    Serial.print(game->get_pacmanPosition().x);
-    Serial.print(", ");
-    Serial.print(game->get_pacmanPosition().y);
-    Serial.println(")");
-    Serial.print("Blue Ghost position : (");
-    Serial.print(game->get_blueGhostPosition().x);
-    Serial.print(", ");
-    Serial.print(game->get_blueGhostPosition().y);
-    Serial.println(")");
-    Serial.print("Red Ghost position : (");
-    Serial.print(game->get_redGhostPosition().x);
-    Serial.print(", ");
-    Serial.print(game->get_redGhostPosition().y);
-    Serial.println(")");
-    Serial.print("Pink Ghost position : (");
-    Serial.print(game->get_pinkGhostPosition().x);
-    Serial.print(", ");
-    Serial.print(game->get_pinkGhostPosition().y);
-    Serial.println(")");
-    Serial.print("Orange Ghost position : (");
-    Serial.print(game->get_orangeGhostPosition().x);
-    Serial.print(", ");
-    Serial.print(game->get_orangeGhostPosition().y);
-    Serial.println(")");
-    Serial.print("Free RAM : ");
-    Serial.print(freeMemory());
-    Serial.println(" bytes");
+    char buf[24];
+    snprintf(buf, sizeof(buf), "Tick: %d | RAM: %d bytes", state.tick, freeMemory());
+    Serial.println(buf);
+    printPos("Pacman",       game->get_pacmanPosition());
+    printPos("Blue Ghost",   game->get_blueGhostPosition());
+    printPos("Red Ghost",    game->get_redGhostPosition());
+    printPos("Pink Ghost",   game->get_pinkGhostPosition());
+    printPos("Orange Ghost", game->get_orangeGhostPosition());
+
+    // 2.2 Cleanup
     Serial.flush();
-
     delay(500);
 
-    // We register his inputs directly into the Game
-    // object
+    /// INPUT REGISTERING ///
+    // We register his inputs directly into the Game object
     inputs newInputs = inputs(); // Default constructor will retrieve the current inputs state
     game->registerInputs(newInputs);
 }

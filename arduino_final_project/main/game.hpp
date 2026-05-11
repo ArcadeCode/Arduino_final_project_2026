@@ -90,8 +90,7 @@ struct gameState {
     }
 };
 
-struct GridPosition
-{
+struct GridPosition {
     uint8_t x;
     uint8_t y;
 };
