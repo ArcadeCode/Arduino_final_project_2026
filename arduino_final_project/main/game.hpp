@@ -81,7 +81,7 @@ struct Cell {
 
 struct gameState {
     unsigned long tick;
-    Cell grid[GAME_GRID_X_AXIS_LEN][GAME_GRID_Y_AXIS_LEN]; // Official grid size from the first game
+    Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]; // Official grid size from the first game
 
     gameState() : tick(0) {
         // Initialize the grid with empty cells (0b00000000) which is BG_EMPTY + ENT_EMPTY
@@ -90,11 +90,25 @@ struct gameState {
     }
 };
 
+struct GridPosition
+{
+    uint8_t x;
+    uint8_t y;
+};
+
 
 class Game {
 private:
     gameState state;
     inputs currentInputs;
+
+    // Helpers for computing
+    int moveEntity(CellEntitiesType Entity, uint8_t old_x, uint8_t old_y, uint8_t new_x, uint8_t new_y);
+    GridPosition pacmanPosition;
+    GridPosition blueGhostPosition;
+    GridPosition redGhostPosition;
+    GridPosition pinkGhostPosition;
+    GridPosition orangeGhostPosition;
 
     // Computing functions called each step
     void computePacmanPosition();
@@ -112,5 +126,12 @@ public:
     void registerInputs(inputs &newInputs);
 
     // Level information retrieve
-    void loadLevel(uint8_t level);
+    void loadLevel(char level);
+
+    // Getters for entities positions
+    GridPosition get_pacmanPosition() const { return pacmanPosition; }
+    GridPosition get_blueGhostPosition() const { return blueGhostPosition; }
+    GridPosition get_redGhostPosition() const { return redGhostPosition; }
+    GridPosition get_pinkGhostPosition() const { return pinkGhostPosition; }
+    GridPosition get_orangeGhostPosition() const { return orangeGhostPosition; }
 };

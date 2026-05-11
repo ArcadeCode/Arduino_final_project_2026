@@ -97,17 +97,17 @@ def grid_to_cpp(grid: List[List[Cell]], var_name: str = "grid") -> str:
         f"    memset(state.grid, 0, sizeof(state.grid));",
         "",
     ]
-    for x in range(GRID_W):
-        for y in range(GRID_H):
+    for y in range(GRID_H):
+        for x in range(GRID_W):
             cell = grid[x][y]
             if cell.data != 0:
                 parts = []
                 bg = cell.get_bg()
                 ent = cell.get_ent()
                 if bg != BG.EMPTY:
-                    parts.append(f"state.grid[{x}][{y}].setBackground({bg_cpp_name(bg)})")
+                    parts.append(f"this->state.grid[{x}][{y}].setBackground({bg_cpp_name(bg)})")
                 if ent != ENT.EMPTY:
-                    parts.append(f"state.grid[{x}][{y}].setEntity({ent_cpp_name(ent)})")
+                    parts.append(f"this->state.grid[{x}][{y}].setEntity({ent_cpp_name(ent)})")
                 for p in parts:
                     lines.append(f"    {p};")
     lines.append("}")
@@ -121,7 +121,7 @@ def grid_to_raw_array(grid: List[List[Cell]]) -> str:
         "",
         f"const uint8_t level_data[{GRID_W}][{GRID_H}] = {{",
     ]
-    for x in range(GRID_W):
+    for y in range(GRID_W):
         row_vals = ", ".join(f"0x{grid[x][y].data:02X}" for y in range(GRID_H))
         comma = "," if x < GRID_W - 1 else ""
         lines.append(f"    {{{row_vals}}}{comma}  // x={x}")

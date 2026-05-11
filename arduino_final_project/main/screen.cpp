@@ -6,15 +6,19 @@ Screen::Screen() {
 
 Screen::~Screen() = default;
 
+
 void Screen::print_frame(gameState &state) {
-    // uint8_t because GAME_GRID_._AXIS_LEN is < 255
-    Serial.print(F("@____________________________________@\n"));
-    for (uint8_t i = 0; i < GAME_GRID_X_AXIS_LEN; i++) {
-        Serial.print("|");
-        for (uint8_t j = 0; j < GAME_GRID_Y_AXIS_LEN; j++) {
-            Serial.print(state.grid[i][j].toChar());
+    Serial.println(F("@____________________________@"));
+    for (uint8_t y = 0; y < GAME_GRID_Y_AXIS_LEN; y++) {
+        char serial_s[GAME_GRID_X_AXIS_LEN + 4];
+        serial_s[0] = '|';
+        for (uint8_t x = 0; x < GAME_GRID_X_AXIS_LEN; x++) {
+            serial_s[x + 1] = state.grid[x][y].toChar();
         }
-        Serial.print("|\n");
+        serial_s[GAME_GRID_X_AXIS_LEN + 1] = '|';
+        serial_s[GAME_GRID_X_AXIS_LEN + 2] = '\n';
+        serial_s[GAME_GRID_X_AXIS_LEN + 3] = '\0';
+        Serial.print(serial_s);
     }
-    Serial.print(F("@____________________________________@\n"));
+    Serial.println(F("@____________________________@"));
 }
