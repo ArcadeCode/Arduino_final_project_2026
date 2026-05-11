@@ -15,7 +15,6 @@ void Screen::print_frame(gameState &state) {
             Serial.print(state.grid[i][j].toChar());
         }
         Serial.print("|\n");
-        Serial.flush();
     }
     Serial.print(F("@____________________________________@\n"));
 }
