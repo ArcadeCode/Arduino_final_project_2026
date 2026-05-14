@@ -4,13 +4,24 @@
 
 #include <Arduino.h> // Only for the freeMemory function
 
+/**
+ * Not to complicated function who determine the heap
+ * size in bytes using runtime variables. It is used
+ * to determine if we reach an overflow.
+ */
 int freeMemory() {
-  extern char *__brkval;
-  extern char __heap_start;
+    // This two address are determine by the linker script.
+    extern char *__brkval; // The top address of the Heap
+    extern char __heap_start; // The start address of the Heap
 
-  char top;
-  
-  return &top - (__brkval == 0 ? &__heap_start : __brkval);
+    char top; // Local variable: its address is on the stack
+
+    // Calculation of free memory:
+    // - If __brkval == 0: the heap has not yet been used, we take __heap_start as reference.
+    // - Otherwise, we use __brkval (current address of the heap).
+    // - &top gives the current address of the top of the stack.
+    // - The difference between &top and the end of the heap gives the free space.
+    return &top - (__brkval == 0 ? &__heap_start : __brkval);
 }
 
 // We done that for future heap allocation in setup()
@@ -18,17 +29,22 @@ Game* game = nullptr;
 Screen* screen = nullptr;
 
 void setup() {
+    // 0. Starting the Serial Monitor
     Serial.begin(19200);
     Serial.println("BOOT OK");
 
+    // 1. Creating a new Game object
     game = new Game(); // Allocation on the heap
     Serial.println("Game allocated");
 
+    // 2. Constructing the Game object with default values
     game->start(); // Construct gameState 0 and put dummy values in each entities positions
     Serial.println("Game started");
-
+    
+    // 3. Loading the default level
     game->loadLevel(0); // Load debug level
 
+    // 4. Creating a new Screen object
     screen = new Screen(); // Allocation on the heap
     Serial.println("Screen allocated");
 }
