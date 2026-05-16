@@ -86,17 +86,25 @@ def empty_grid() -> List[List[Cell]]:
     return [[Cell() for _ in range(GRID_H)] for _ in range(GRID_W)]
 
 # ─── Conversion C++ ──────────────────────────────────────────────────────────
-
 def grid_to_cpp(grid: List[List[Cell]], var_name: str = "grid") -> str:
     """Convertit la grille en code C++ Cell grid[28][36]"""
     lines = [
         "// Niveau généré par Pac-Man Level Editor",
         f"// Taille : {GRID_W}×{GRID_H}",
         "",
-        f"void loadLevel(gameState& state) {{",
+        f"void loadLevel(char level) {{",
         f"    memset(state.grid, 0, sizeof(state.grid));",
         "",
     ]
+
+    pacman_pos = None
+    ghost_positions = {
+        ENT.BLUE_GHOST:   None,
+        ENT.RED_GHOST:    None,
+        ENT.PINK_GHOST:   None,
+        ENT.ORANGE_GHOST: None,
+    }
+
     for y in range(GRID_H):
         for x in range(GRID_W):
             cell = grid[x][y]
@@ -108,8 +116,30 @@ def grid_to_cpp(grid: List[List[Cell]], var_name: str = "grid") -> str:
                     parts.append(f"this->state.grid[{x}][{y}].setBackground({bg_cpp_name(bg)})")
                 if ent != ENT.EMPTY:
                     parts.append(f"this->state.grid[{x}][{y}].setEntity({ent_cpp_name(ent)})")
+                    if ent == ENT.PACMAN:
+                        pacman_pos = (x, y)
+                    elif ent in ghost_positions:
+                        ghost_positions[ent] = (x, y)
                 for p in parts:
                     lines.append(f"    {p};")
+
+    lines.append("")
+    lines.append("    // Positions initiales")
+
+    if pacman_pos:
+        lines.append(f"    this->pacmanPosition = {{{pacman_pos[0]}, {pacman_pos[1]}}};")
+
+    ghost_setters = {
+        ENT.BLUE_GHOST:   "this->blueGhost.setPosition",
+        ENT.RED_GHOST:    "this->redGhost.setPosition",
+        ENT.PINK_GHOST:   "this->pinkGhost.setPosition",
+        ENT.ORANGE_GHOST: "this->orangeGhost.setPosition",
+    }
+    for ent, setter in ghost_setters.items():
+        pos = ghost_positions[ent]
+        if pos:
+            lines.append(f"    {setter}({{{pos[0]}, {pos[1]}}});")
+
     lines.append("}")
     return "\n".join(lines)
 
