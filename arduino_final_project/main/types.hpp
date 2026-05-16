@@ -3,6 +3,36 @@
 #define GAME_GRID_X_AXIS_LEN 28
 #define GAME_GRID_Y_AXIS_LEN 36
 
+/*
+Simple solution because we need tuples of 2D positions in some part of the code
+and I don't wanna call `std::tuple` because we are in a limited environnement
+and this object have to many unusefull attributes and methods.
+*/
+struct GridPosition {
+    uint8_t x;
+    uint8_t y;
+
+    constexpr GridPosition() : x(0), y(0) {}
+    constexpr GridPosition(uint8_t x, uint8_t y) : x(x), y(y) {}
+};
+
+enum EntityFacing {
+    EF_NORTH,
+    EF_SOUTH,
+    EF_EAST,
+    EF_WEST
+};
+
+inline char entityFacingToChar(EntityFacing facing) {
+    switch (facing) {
+        case EF_NORTH: return 'N';
+        case EF_SOUTH: return 'S';
+        case EF_EAST:  return 'E';
+        case EF_WEST:  return 'W';
+        default:       return '?';
+    }
+}
+
 enum CellBackgroundType {
     BG_EMPTY=0,
     BG_WALL=1,
@@ -77,7 +107,7 @@ struct Cell {
     }
 };
 
-struct gameState {
+struct GameState {
     // TODO: OPTIMISATION MÉMOIRE (priorité haute, ~990 octets à économiser)
     //
     // Problème actuel : grid[][] occupe 28×36 = 1008 octets de heap, sur un
@@ -92,7 +122,7 @@ struct gameState {
     //   Lecture : pgm_read_byte(&LEVEL_0[y][x])
     //   Gain : 1008 octets de SRAM récupérés
     //
-    // ÉTAPE 2 — Supprimer grid[][] de gameState, ne garder que les positions
+    // ÉTAPE 2 — Supprimer grid[][] de GameState, ne garder que les positions
     //   des entités (pacman + 4 fantômes + fruit), soit ~20 octets au total :
     //   GridPosition pacman;
     //   GridPosition ghosts[4];
@@ -103,44 +133,23 @@ struct gameState {
     //   volée en combinant PROGMEM (background) + positions (entités),
     //   sans jamais matérialiser la grille complète en RAM.
     //
-    // Résultat attendu : gameState ~20 octets, ~1400 octets libres en loop.
+    // Résultat attendu : GameState ~20 octets, ~1400 octets libres en loop.
 
+    // Tick counter, incremented at each game step, is used for timing and animations.
     unsigned long tick;
     Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]; // Official grid size from the first game
 
-    gameState() : tick(0) {
+    // Centralized positions of entities for easier access to Ghosts AI movement, instead of searching the grid for them.
+    GridPosition pacmanPosition;
+    EntityFacing pacmanFacing;
+    GridPosition blueGhostPosition;
+    GridPosition redGhostPosition;
+    GridPosition pinkGhostPosition;
+    GridPosition orangeGhostPosition;
+
+    GameState() : tick(0), pacmanPosition({0, 0}), blueGhostPosition({0, 0}), redGhostPosition({0, 0}), pinkGhostPosition({0, 0}), orangeGhostPosition({0, 0}), pacmanFacing(EF_NORTH) {
         // Initialize the grid with empty cells (0b00000000) which is BG_EMPTY + ENT_EMPTY
         // We use memset which is fastest to initialize a grid of Cell.
         memset(grid, 0, sizeof(grid));
     }
 };
-
-/*
-Simple solution because we need tuples of 2D positions in some part of the code
-and I don't wanna call `std::tuple` because we are in a limited environnement
-and this object have to many unusefull attributes and methods.
-*/
-struct GridPosition {
-    uint8_t x;
-    uint8_t y;
-
-    constexpr GridPosition() : x(0), y(0) {}
-    constexpr GridPosition(uint8_t x, uint8_t y) : x(x), y(y) {}
-};
-
-enum EntityFacing {
-    EF_NORTH,
-    EF_SOUTH,
-    EF_EAST,
-    EF_WEST
-};
-
-inline char entityFacingToChar(EntityFacing facing) {
-    switch (facing) {
-        case EF_NORTH: return 'N';
-        case EF_SOUTH: return 'S';
-        case EF_EAST:  return 'E';
-        case EF_WEST:  return 'W';
-        default:       return '?';
-    }
-}

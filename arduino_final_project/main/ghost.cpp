@@ -1,126 +1,90 @@
 #include "ghost.hpp"
 
+// Initialization list which is obligatory for constants.
+Ghost::Ghost(GameState* state, GhostPersonality personality)
+    : state(state), personality(personality), mode(GM_Scatter), lastFacing(EF_NORTH) {}
 
-
-// initialization list which is obligatory for constants.
-Ghost::Ghost(gameState* state, GhostPersonality personality)
-    : state(state), personality(personality), lastFacing(EF_NORTH) {}
-
-GridPosition Ghost::computeScatterTarget() {
+// In Scatter mode, each ghost has a fixed target tile, each of which is located just outside a different corner of the maze. 
+void Ghost::computeScatterTarget() {
     switch (this->personality) {
     case GP_RED:
-        return RED_SCATTER_MODE_TARGET;
+        this->target = RED_SCATTER_MODE_TARGET;
         break;
     
     case GP_PINK:
-        return PINK_SCATTER_MODE_TARGET;
+        this->target = PINK_SCATTER_MODE_TARGET;
         break;
 
     case GP_BLUE:
-        return BLUE_SCATTER_MODE_TARGET;
+        this->target = BLUE_SCATTER_MODE_TARGET;
         break;
 
     case GP_ORANGE:
-        return ORANGE_SCATTER_MODE_TARGET;
+        this->target = ORANGE_SCATTER_MODE_TARGET;
         break;
 
     default:
-        return GridPosition(0, 0);
+        this->target = GridPosition(0, 0);
         break;
     }
 };
 
-GridPosition Ghost::computeChaseTarget() {
+void Ghost::computeChaseTarget() {
     switch (this->personality) {
+    
     case GP_RED:
-        return RED_SCATTER_MODE_TARGET;
+        // Red always target the current pacman position.
         break;
     
     case GP_PINK:
-        return PINK_SCATTER_MODE_TARGET;
+        // Pink alway target 4 tiles ahead of pacman, but due to a bug in the original game, when pacman is facing up, pink target is 4 tiles ahead and 4 tiles to the left of pacman.
         break;
 
     case GP_BLUE:
-        return BLUE_SCATTER_MODE_TARGET;
+        //
         break;
 
     case GP_ORANGE:
-        return ORANGE_SCATTER_MODE_TARGET;
+        //
         break;
 
     default:
-        return GridPosition(0, 0);
+        this->target = {0, 0}; // Default target, this will help us to check errors
         break;
     }
 }
 
-GridPosition Ghost::computeNewTarget() {
+/*
+This function is called when AI mode is Chase or Scatter.
+Frightened mode is based on random movement and don't have a target.
+*/
+void Ghost::computeNewTarget() {
     switch(this->mode) {
         case GM_Chase:
-            return computeChaseTarget();
+            this->computeChaseTarget();
+            break;
         case GM_Scatter:
-            return computeScatterTarget();
+            this->computeScatterTarget();
+            break;
         default:
-            return GridPosition(0, 0);
+            this->target =  {0, 0};
+            break;
     }
-}
-
-bool Ghost::isPositionInIntersection(GridPosition pos) {
-    uint8_t ways = 0;
-    if (this->state->grid[pos.y+1][pos.x].getBackground() != BG_WALL) {
-        ways += 1;
-    } else if (this->state->grid[pos.y-1][pos.x].getBackground() != BG_WALL) {
-        ways += 1;
-    } else if (this->state->grid[pos.y][pos.x+1].getBackground() != BG_WALL) {
-        ways += 1;
-    } else if (this->state->grid[pos.y][pos.x-1].getBackground() != BG_WALL) {
-        ways += 1;
-    }
-
-    // We check if there is 3 ways or more it no more a corridor.
-    if (ways > 2) {
-        return true;
-    } else {
-        return false;
-    }
-    
 };
 
-GridPosition Ghost::computeNewPosition() {
+void Ghost::computeNewPosition() {
     // Check if we are in dummy mode :
     if (this->mode == GM_Frightened) {
         // In Frightened, there is none target.
 
         // 1. Search further intersection
-        if (!this->isPositionInIntersection(this->position)) {
-            return GridPosition(this->position.x, this->position.y);
-        }
            
         // 2. Take a random direction
     } else { 
         // If we are in SCATTER or CHASE mode...
-        GridPosition target = computeNewTarget();
-
-        switch (this->personality) {
-        case GP_RED:
-            return RED_SCATTER_MODE_TARGET;
-            break;
+        this->computeNewTarget();
         
-        case GP_PINK:
-            return PINK_SCATTER_MODE_TARGET;
-            break;
-
-        case GP_BLUE:
-            return BLUE_SCATTER_MODE_TARGET;
-            break;
-
-        case GP_ORANGE:
-            return ORANGE_SCATTER_MODE_TARGET;
-            break;
-
-        default:
-            break;
-        }
+        // TODO: Implement the pathfinding
     }
 };
 
@@ -155,8 +119,8 @@ char* Ghost::getGhostInformations() {
         default:            modeStr = "???";         break;
     }
 
-    sprintf(ghostInfo, "%s ghost (%d, %d) facing [%c] mode: %s",
-        colorStr, this->position.x, this->position.y, facingChar, modeStr);
+    sprintf(ghostInfo, "%s ghost (%d, %d) facing: [%c] mode: %s target (%d, %d)",
+        colorStr, this->position.x, this->position.y, facingChar, modeStr, this->target.x, this->target.y);
 
     return ghostInfo;
 }

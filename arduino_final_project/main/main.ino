@@ -51,7 +51,7 @@ void setup() {
     Serial.println(freeMemory());
 
     // 2. Constructing the Game object with default values
-    game->start(); // Construct gameState 0 and put dummy values in each entities positions
+    game->start(); // Construct GameState 0 and put dummy values in each entities positions
     Serial.println("Game started");
     
     Serial.print(F("Apres Game initialisation: "));
@@ -69,7 +69,7 @@ void setup() {
 
 void loop() {
     /// 1. CALCULATING NEW GAME STATE ///
-    gameState& state = game->step();
+    GameState& state = game->step();
 
     /// 2. SENDING STATE TO THE OUTPUT SCREEN ///
     screen->print_frame(state);

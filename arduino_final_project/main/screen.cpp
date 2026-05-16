@@ -12,7 +12,7 @@ Screen::~Screen() = default;
  * 
  * @attention we print line by line instead of frame by frame due to memory limitations.
  */
-void Screen::print_frame(gameState &state) {
+void Screen::print_frame(GameState &state) {
     char serial_s[GAME_GRID_X_AXIS_LEN + 4]; // Each line contain '|' + 28 Cells + '|' + '\n + '\0' = 4
     // This values in the array will never changed, we set them here to speed up allocation.
     serial_s[0] = '|';

@@ -77,27 +77,26 @@ class Ghost {
 private:
     GridPosition position;
     GridPosition lastPosition; // Used for computing
+    GridPosition target;
     EntityFacing lastFacing; // Used for computing
     const GhostPersonality personality;
     GhostAiMode mode;
 
-    const gameState* state; // The gameState is share by Game
-
-    // Determine if the Ghost is in a corridor or not
-    bool isPositionInIntersection(GridPosition pos);
+    const GameState* state; // The GameState is share by Game
 
     // Determine where the ghost face by comparing is last and now position.
     // It's vital cause Ghosts cannot wall back on them footsteps.
     EntityFacing whereDirectionGhostFace();
 
 public:
-    Ghost(gameState* state, GhostPersonality personality);
+    Ghost(GameState* state, GhostPersonality personality);
     ~Ghost() = default;
 
     // We don't need a computeFrightenedTarget() cause is this mode, there is no target.
-    GridPosition computeChaseTarget();
-    GridPosition computeScatterTarget();
-    GridPosition computeNewTarget();
+    void computeChaseTarget();
+    void computeScatterTarget();
+    // Determine the next target cell of the ghost based on his personality and the current mode of the game.
+    void computeNewTarget();
 
     /*
     New position is called each state and change
@@ -108,7 +107,7 @@ public:
     and what algorithm to use, and after compute the
     next position of the Ghost.
     */
-    GridPosition computeNewPosition();
+    void computeNewPosition();
 
     /*
     AiMode is determine by in-game timing to we need to
@@ -132,6 +131,9 @@ public:
 
     void setPosition(GridPosition pos);
     void setFacing(EntityFacing facing);
+
+    GridPosition getPosition() const { return this->position; }
+
 
     char* getGhostInformations();
 };

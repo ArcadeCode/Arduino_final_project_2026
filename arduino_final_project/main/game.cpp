@@ -10,29 +10,43 @@ Game::Game()
 Game::~Game() = default;
 
 void Game::start() {
-    // Direct in-place reset of the existing heap-allocated gameState, avoiding
+    // Direct in-place reset of the existing heap-allocated GameState, avoiding
     // a 1008 bytes stack-allocated temporary that would cause a stack overflow.
     // thank C++ for that !
     this->state.tick = 0;
     memset(this->state.grid, 0, sizeof(this->state.grid));
 
     this->pacmanPosition = {20, 20}; // Dummy position for pacman, we will change it in loadLevel() with the real position of pacman.
-    this->pacmanFacing = EF_WEST; // Dummy facing for pacman, can be changed in loadLevel() with the real facing of pacman. // TODO:: Implement starting facing for pacman in the editor.
+    this->pacmanFacing = EF_WEST; // Dummy facing for pacman, can be changed in loadLevel() with the real facing of pacman.
+    // TODO:: Implement starting facing for pacman in the editor.
 
     // Initialize ghosts is done in the constructor due to presence of consts in them.
-    // Initializing ghosts facing to dummy value based on the official first level, can be changed in loadLevel() with the real starting facing of each ghost. // TODO:: Implement starting facing for ghosts in the editor.
+    // Initializing ghosts facing to dummy value based on the official first level, can be changed in loadLevel() with the real starting facing of each ghost.
+    // TODO:: Implement starting facing for ghosts in the editor.
     this->blueGhost.setFacing(EF_NORTH);
     this->redGhost.setFacing(EF_WEST);
     this->pinkGhost.setFacing(EF_SOUTH);
     this->orangeGhost.setFacing(EF_WEST);
 };
 
-gameState& Game::step() {
+GameState& Game::step() {
     this->state.tick++;
 
+    // Share entities positions to the global state for easier access to ghosts AI movement, instead of searching the grid for them.
+    this->state.pacmanPosition      = this->pacmanPosition;
+    this->state.pacmanFacing        = this->pacmanFacing;
+    this->state.blueGhostPosition   = this->blueGhost.getPosition();
+    this->state.redGhostPosition    = this->redGhost.getPosition();
+    this->state.pinkGhostPosition   = this->pinkGhost.getPosition();
+    this->state.orangeGhostPosition = this->orangeGhost.getPosition();
+
     // Compute new positions for all entities
-    //this->computePacmanPosition();
-    
+    this->computePacmanPosition();
+
+    this->blueGhost.computeNewPosition();
+    this->redGhost.computeNewPosition();
+    this->pinkGhost.computeNewPosition();
+    this->orangeGhost.computeNewPosition();
 
     // In the end return the new state to be printed on the screen
     return this->state;
@@ -62,11 +76,7 @@ int Game::moveEntity(CellEntitiesType Entity, uint8_t old_x, uint8_t old_y, uint
     }
 };
 
-
-///////////////////////////////////////////
-// DEBUG ONLY
-///////////////////////////////////////////
-
+// TODO: Move this function to a better place, it's used by ghosts more than game.
 static uint8_t lfsrRandomDirection() {
     static uint16_t state = 0xACE1;
 
@@ -79,34 +89,7 @@ static uint8_t lfsrRandomDirection() {
     return (uint8_t)(state & 0x03);
 }
 
-//void Game::computePacmanPosition() {
-//    int touchWall = 1;
-//    Serial.print(F("DEBUG, PACMAN POS HAS CHANGED from Game::computePacmanPosition(), now position is : ("));
-//    Serial.print(this->pacmanPosition.x);
-//    Serial.print(F(", "));
-//    Serial.print(this->pacmanPosition.y);
-//    Serial.println(F(")"));
-//
-//    // Reroll until the next position doesn't touch a wall.
-//    while (touchWall != 0) {
-//        uint8_t direction = lfsrRandomDirection();
-//        
-//        switch (direction) {
-//            case 0:
-//                touchWall = this->moveEntity(ENT_PACMAN, this->pacmanPosition.x, this->pacmanPosition.y, this->pacmanPosition.x, this->pacmanPosition.y + 1);
-//                break;
-//            case 1:
-//                touchWall = this->moveEntity(ENT_PACMAN, this->pacmanPosition.x, this->pacmanPosition.y, this->pacmanPosition.x + 1, this->pacmanPosition.y);
-//                break;
-//            case 2:
-//                touchWall = this->moveEntity(ENT_PACMAN, this->pacmanPosition.x, this->pacmanPosition.y, this->pacmanPosition.x, this->pacmanPosition.y - 1);
-//                break;
-//            case 3:
-//                touchWall = this->moveEntity(ENT_PACMAN, this->pacmanPosition.x, this->pacmanPosition.y, this->pacmanPosition.x - 1, this->pacmanPosition.y);
-//                break;
-//        }
-//    }
-//}
+void Game::computePacmanPosition() {}
 
 // Niveau généré par Pac-Man Level Editor
 // Taille : 28×36

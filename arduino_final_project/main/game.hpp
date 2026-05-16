@@ -7,7 +7,7 @@ static uint8_t lfsrRandomDirection();
 
 class Game {
 private:
-    gameState state;
+    GameState state;
     inputs currentInputs;
 
     // Helpers for computing
@@ -20,19 +20,15 @@ private:
     Ghost pinkGhost;
     Ghost orangeGhost;
 
-    // Computing functions called each step
     void computePacmanPosition();
-    void computeBlueGhostPosition();
-    void computeRedGhostPosition();
-    void computePinkGhostPosition();
-    void computeOrangeGhostPosition();
+    // Ghosts positions are directly computed in their class and shared to the global state for easier access to ghosts AI movement, instead of searching the grid for them.
 
-public:
+    public:
     Game(/* args */);
     ~Game();
 
     void start(); /* Start a new game */
-    gameState& step(); /* Step from one new frame */
+    GameState& step(); /* Step from one new frame */
     void registerInputs(inputs &newInputs);
 
     // Level information retrieve
