@@ -1,4 +1,8 @@
 .vscode/
 
+**/__pycache__/
+
 migrate_levels.py
+
 commit.txt
+export.txt
