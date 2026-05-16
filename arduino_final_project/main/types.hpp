@@ -37,7 +37,8 @@ enum CellBackgroundType {
     BG_EMPTY=0,
     BG_WALL=1,
     BG_GUM=2,     // In french it's called : "Pac-gum"
-    BG_ENERGIZE=3 // In french it's called : "Super pac-gum"
+    BG_ENERGIZE=3, // In french it's called : "Super pac-gum"
+    BG_GHOST_HOUSE=4 // The only wall who can be crossed by ghosts but not by pacman
 };
 
 enum CellEntitiesType {
@@ -64,26 +65,26 @@ struct Cell {
     - -> this bit is allocated but never used
 
     bit:  7 6 5 4 3 2 1 0
-          - - - E E E B B
+          - - E E E B B B
     */
     uint8_t data;
 
     // --- Background ---
     inline void setBackground(CellBackgroundType bg) {
-        data = (data & 0b11111100) | (bg & 0b00000011);
+        data = (data & 0b11111000) | (bg & 0b00000111);
     }
 
     inline CellBackgroundType getBackground() const {
-        return (CellBackgroundType)(data & 0b00000011);
+        return (CellBackgroundType)(data & 0b00000111);
     }
 
     // --- Entity ---
     inline void setEntity(CellEntitiesType ent) {
-        data = (data & 0b11100011) | ((ent & 0b00000111) << 2);
+        data = (data & 0b11000111) | ((ent & 0b00001111) << 2);
     }
 
     inline CellEntitiesType getEntity() const {
-        return (CellEntitiesType)((data >> 2) & 0b00000111);
+        return (CellEntitiesType)((data >> 2) & 0b00001111);
     }
 
     // Convert cell type to a char value which can be print using Serial.print(Cell.toChar())
@@ -102,6 +103,7 @@ struct Cell {
             case BG_GUM:      return '.';
             case BG_ENERGIZE: return '*';
             case BG_EMPTY:    return ' ';
+            case BG_GHOST_HOUSE: return '-';
             default:          return '?';
         }
     }

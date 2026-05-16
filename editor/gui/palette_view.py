@@ -107,6 +107,7 @@ class PaletteView(tk.Frame):
             ("ghosts",        f"Ghosts (max 4)"),
             ("pacman",        "Pac-Man (max 1)"),
             ("fruit",         "Fruit (max 1)"),
+            ("ghost_house",   "Ghost House"),
         ]
         for key, display in stat_rows:
             row = tk.Frame(self, bg="#0A0A1A")

@@ -57,6 +57,7 @@ _CHAR_MAP: dict = {
     '#': (BG.WALL,     ENT.EMPTY),
     '.': (BG.GUM,      ENT.EMPTY),
     '*': (BG.ENERGIZE, ENT.EMPTY),
+    '-': (BG.GHOST_HOUSE, ENT.EMPTY),
     ' ': (BG.EMPTY,    ENT.EMPTY),
     'P': (BG.EMPTY,    ENT.PACMAN),
     'R': (BG.EMPTY,    ENT.RED_GHOST),
@@ -222,6 +223,7 @@ def _bg_cpp(bg: BG) -> str:
         BG.WALL:     "BG_WALL",
         BG.GUM:      "BG_GUM",
         BG.ENERGIZE: "BG_ENERGIZE",
+        BG.GHOST_HOUSE: "BG_GHOST_HOUSE",
         BG.EMPTY:    "BG_EMPTY",
     }[bg]
 

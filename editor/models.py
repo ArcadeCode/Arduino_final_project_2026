@@ -16,6 +16,7 @@ class BG(IntEnum):
     WALL     = 1   # BG_WALL
     GUM      = 2   # BG_GUM
     ENERGIZE = 3   # BG_ENERGIZE
+    GHOST_HOUSE=4  # GB_GHOST_HOUSE
 
 
 # ── Entity enum (matches C++ ENT_* values) ───────────────────────────────────
@@ -39,32 +40,32 @@ GHOST_ENTITIES = {ENT.BLUE_GHOST, ENT.RED_GHOST, ENT.PINK_GHOST, ENT.ORANGE_GHOS
 
 class Cell:
     """
-    One grid cell, bit-packed exactly like the C++ struct:
+    One grid cell, bit-packed with 3 bits for BG and 3 bits for ENT:
 
         bit:  7 6 5 4 3 2 1 0
-              - - - E E E B B
-              └──────┘ └────┘
+              - - E E E B B B
+              └───────┘└─────┘
                entity   bg
     """
 
     def __init__(self, data: int = 0):
         self.data: int = data & 0xFF
 
-    # ── Background accessors ──────────────────────────────────────────────────
+# ── Background accessors ──────────────────────────────────────────────────
 
     def get_bg(self) -> BG:
-        return BG(self.data & 0b00000011)
+        return BG(self.data & 0b00000111)
 
     def set_bg(self, bg: BG) -> None:
-        self.data = (self.data & 0b11111100) | (int(bg) & 0b00000011)
+        self.data = (self.data & 0b11111000) | (int(bg) & 0b00000111)
 
     # ── Entity accessors ──────────────────────────────────────────────────────
 
     def get_ent(self) -> ENT:
-        return ENT((self.data >> 2) & 0b00000111)
+        return ENT((self.data >> 3) & 0b00000111)
 
     def set_ent(self, ent: ENT) -> None:
-        self.data = (self.data & 0b11100011) | ((int(ent) & 0b00000111) << 2)
+        self.data = (self.data & 0b11000111) | ((int(ent) & 0b00000111) << 3)
 
     # ── ASCII representation ──────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ class Cell:
         if bg == BG.WALL:           return '#'
         if bg == BG.GUM:            return '.'
         if bg == BG.ENERGIZE:       return '*'
+        if bg == BG.GHOST_HOUSE:    return '-'  # Ajout de GB_GHOST_HOUSE
         return ' '
 
     # ── Utilities ─────────────────────────────────────────────────────────────
@@ -90,7 +92,6 @@ class Cell:
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"Cell(bg={self.get_bg().name}, ent={self.get_ent().name})"
-
 
 # ── Grid factory ─────────────────────────────────────────────────────────────
 

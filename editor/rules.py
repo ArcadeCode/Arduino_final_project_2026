@@ -90,28 +90,23 @@ def _count_ghosts(
 
 
 def grid_summary(grid: List[List[Cell]]) -> dict:
-    """
-    Return a dict of entity/background counts for the stats panel.
-
-    Keys: "walls", "gums", "power_pellets", "ghosts",
-          "pacman", "fruit", "entities"
-    """
-    from models import BG as _BG  # local import avoids circularity
-    walls = gums = pellets = ghosts = pacman = fruit = 0
+    walls = gums = pellets = ghosts = pacman = fruit = ghost_house = 0
     for gx in range(GRID_W):
         for gy in range(GRID_H):
             c = grid[gx][gy]
             bg, ent = c.get_bg(), c.get_ent()
-            if bg == _BG.WALL:     walls   += 1
-            if bg == _BG.GUM:      gums    += 1
-            if bg == _BG.ENERGIZE: pellets += 1
-            if ent in GHOST_ENTITIES: ghosts += 1
-            if ent == ENT.PACMAN:  pacman  += 1
-            if ent == ENT.FRUIT:   fruit   += 1
+            if bg == BG.WALL:        walls       += 1
+            if bg == BG.GUM:         gums        += 1
+            if bg == BG.ENERGIZE:    pellets     += 1
+            if bg == BG.GHOST_HOUSE: ghost_house += 1
+            if ent in GHOST_ENTITIES: ghosts      += 1
+            if ent == ENT.PACMAN:     pacman      += 1
+            if ent == ENT.FRUIT:      fruit       += 1
     return {
         "walls":         walls,
         "gums":          gums,
         "power_pellets": pellets,
+        "ghost_house":   ghost_house,
         "ghosts":        ghosts,
         "pacman":        pacman,
         "fruit":         fruit,
