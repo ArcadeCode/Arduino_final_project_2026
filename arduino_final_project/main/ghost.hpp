@@ -73,17 +73,11 @@ enum GhostAiMode {
     */
 };
 
-enum GhostFacing {
-    GF_NORTH,
-    GF_SOUTH,
-    GF_EST,
-    GF_WEST
-};
-
 class Ghost {
 private:
     GridPosition position;
     GridPosition lastPosition; // Used for computing
+    EntityFacing lastFacing; // Used for computing
     const GhostPersonality personality;
     GhostAiMode mode;
 
@@ -94,7 +88,7 @@ private:
 
     // Determine where the ghost face by comparing is last and now position.
     // It's vital cause Ghosts cannot wall back on them footsteps.
-    GhostFacing whereDirectionGhostFace();
+    EntityFacing whereDirectionGhostFace();
 
 public:
     Ghost(gameState* state, GhostPersonality personality);
@@ -137,6 +131,7 @@ public:
     void setAiMode(GhostAiMode mode);
 
     void setPosition(GridPosition pos);
+    void setFacing(EntityFacing facing);
 
     char* getGhostInformations();
 };

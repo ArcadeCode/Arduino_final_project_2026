@@ -127,3 +127,20 @@ struct GridPosition {
     constexpr GridPosition() : x(0), y(0) {}
     constexpr GridPosition(uint8_t x, uint8_t y) : x(x), y(y) {}
 };
+
+enum EntityFacing {
+    EF_NORTH,
+    EF_SOUTH,
+    EF_EAST,
+    EF_WEST
+};
+
+inline char entityFacingToChar(EntityFacing facing) {
+    switch (facing) {
+        case EF_NORTH: return 'N';
+        case EF_SOUTH: return 'S';
+        case EF_EAST:  return 'E';
+        case EF_WEST:  return 'W';
+        default:       return '?';
+    }
+}

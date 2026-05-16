@@ -13,6 +13,7 @@ private:
     // Helpers for computing
     int moveEntity(CellEntitiesType Entity, uint8_t old_x, uint8_t old_y, uint8_t new_x, uint8_t new_y);
     GridPosition pacmanPosition;
+    EntityFacing pacmanFacing;
 
     Ghost blueGhost;
     Ghost redGhost;
@@ -39,6 +40,8 @@ public:
 
     // Getters for entities positions
     GridPosition get_pacmanPosition() const { return pacmanPosition; }
+    EntityFacing get_pacmanFacing() const { return pacmanFacing; }
+
     char* get_blueGhostInformation() const { return blueGhost.getGhostInformations(); }
     char* get_redGhostInformation() const { return redGhost.getGhostInformations(); }
     char* get_pinkGhostInformation() const { return pinkGhost.getGhostInformations(); }

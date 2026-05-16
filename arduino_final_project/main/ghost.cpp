@@ -1,18 +1,10 @@
 #include "ghost.hpp"
 
-char* Ghost::getGhostInformations() {
-    static char info[40];
-    sprintf(info, "(%d, %d) Mode: %d", this->position.x, this->position.y, this->mode);
-    return info;
-}
 
-void Ghost::setPosition(GridPosition pos) {
-    this->position = pos;
-}
 
 // initialization list which is obligatory for constants.
 Ghost::Ghost(gameState* state, GhostPersonality personality)
-    : state(state), personality(personality) {}
+    : state(state), personality(personality), lastFacing(EF_NORTH) {}
 
 GridPosition Ghost::computeScatterTarget() {
     switch (this->personality) {
@@ -131,3 +123,40 @@ GridPosition Ghost::computeNewPosition() {
         }
     }
 };
+
+void Ghost::setPosition(GridPosition pos) {
+    this->position = pos;
+}
+
+void Ghost::setFacing(EntityFacing facing) {
+    this->lastFacing = facing;
+}
+
+// Shared buffer across all Ghost instances, safe as long as getGhostInformations() result is consumed before the next call.
+static char ghostInfo[64];
+
+char* Ghost::getGhostInformations() {
+    const char* colorStr;
+    switch (this->personality) {
+        case GP_RED:    colorStr = "Red";    break;
+        case GP_BLUE:   colorStr = "Blue";   break;
+        case GP_PINK:   colorStr = "Pink";   break;
+        case GP_ORANGE: colorStr = "Orange"; break;
+        default:        colorStr = "???";    break;
+    }
+
+    char facingChar = entityFacingToChar(this->lastFacing);
+
+    const char* modeStr;
+    switch (this->mode) {
+        case GM_Chase:      modeStr = "Chase";      break;
+        case GM_Scatter:    modeStr = "Scatter";     break;
+        case GM_Frightened: modeStr = "Frightened";  break;
+        default:            modeStr = "???";         break;
+    }
+
+    sprintf(ghostInfo, "%s ghost (%d, %d) facing [%c] mode: %s",
+        colorStr, this->position.x, this->position.y, facingChar, modeStr);
+
+    return ghostInfo;
+}

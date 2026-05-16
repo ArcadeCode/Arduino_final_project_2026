@@ -83,21 +83,19 @@ void loop() {
     Serial.print(freeMemory());
     Serial.println(F(" bytes"));
 
+    // Print pacman position & facing
     Serial.print(F("Pacman (x, y): "));
     Serial.print(game->get_pacmanPosition().x);
     Serial.print(F(", "));
-    Serial.println(game->get_pacmanPosition().y);
+    Serial.print(game->get_pacmanPosition().y);
+    Serial.print(F(" | Facing: "));
+    Serial.print(entityFacingToChar(game->get_pacmanFacing()));
+    Serial.println();
 
-    Serial.print(F("Blue Ghost: "));
+    // Calling getGhostInformations() for each ghost
     Serial.println(game->get_blueGhostInformation());
-
-    Serial.print(F("Red Ghost: "));
     Serial.println(game->get_redGhostInformation());
-
-    Serial.print(F("Pink Ghost: "));
     Serial.println(game->get_pinkGhostInformation());
-
-    Serial.print(F("Orange Ghost: "));
     Serial.println(game->get_orangeGhostInformation());
 
 

@@ -10,11 +10,21 @@ Game::Game()
 Game::~Game() = default;
 
 void Game::start() {
-    this->state = gameState();
-    Serial.println(F("PACMAN POS HAS CHANGED FROM Game::start(), now position is (20, 20)"));
+    // Direct in-place reset of the existing heap-allocated gameState, avoiding
+    // a 1008 bytes stack-allocated temporary that would cause a stack overflow.
+    // thank C++ for that !
+    this->state.tick = 0;
+    memset(this->state.grid, 0, sizeof(this->state.grid));
+
     this->pacmanPosition = {20, 20}; // Dummy position for pacman, we will change it in loadLevel() with the real position of pacman.
+    this->pacmanFacing = EF_WEST; // Dummy facing for pacman, can be changed in loadLevel() with the real facing of pacman. // TODO:: Implement starting facing for pacman in the editor.
 
     // Initialize ghosts is done in the constructor due to presence of consts in them.
+    // Initializing ghosts facing to dummy value based on the official first level, can be changed in loadLevel() with the real starting facing of each ghost. // TODO:: Implement starting facing for ghosts in the editor.
+    this->blueGhost.setFacing(EF_NORTH);
+    this->redGhost.setFacing(EF_WEST);
+    this->pinkGhost.setFacing(EF_SOUTH);
+    this->orangeGhost.setFacing(EF_WEST);
 };
 
 gameState& Game::step() {
