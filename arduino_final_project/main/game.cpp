@@ -40,9 +40,30 @@ GameState& Game::step() {
     this->state.pinkGhostPosition   = this->pinkGhost.getPosition();
     this->state.orangeGhostPosition = this->orangeGhost.getPosition();
 
-    // Compute new positions for all entities
+    // Compute Pacman movement based on the current inputs and the grid.
     this->computePacmanPosition();
 
+    // Check if pacman eat a dot or an energizer, and update the grid and the remaining dots count.
+    if (this->state.grid[pacmanPosition.y][pacmanPosition.x].getBackground() == BG_GUM
+        || this->state.grid[pacmanPosition.y][pacmanPosition.x].getBackground() == BG_ENERGIZE) {
+        this->state.grid[pacmanPosition.y][pacmanPosition.x].setBackground(BG_EMPTY);
+        if (this->state.remainingDots > 0) {
+            this->state.remainingDots--;
+        }
+    }
+
+    // Check for win/lose conditions
+    if (this->state.remainingDots == 0) {
+        // Send WIN_FLAG
+    } else if (this->state.pacmanPosition == this->state.blueGhostPosition
+            || this->state.pacmanPosition == this->state.redGhostPosition
+            || this->state.pacmanPosition == this->state.pinkGhostPosition
+            || this->state.pacmanPosition == this->state.orangeGhostPosition) {
+        // Send LOSE_FLAG
+    }
+    
+    // Compute new positions for all ghosts
+    this->updateGhostModes();
     this->blueGhost.computeNewPosition();
     this->redGhost.computeNewPosition();
     this->pinkGhost.computeNewPosition();

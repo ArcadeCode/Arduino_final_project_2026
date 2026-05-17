@@ -78,6 +78,8 @@ private:
     GridPosition position;
     GridPosition target;
     EntityFacing lastFacing; // Used for computing
+    uint8_t dotThreshold; // Remaining dots threshold (in %) for ghosts to exit the ghost house.
+
     const GhostPersonality personality;
     GhostAiMode mode;
 
@@ -89,6 +91,8 @@ private:
 
     void moveTowardTarget();   // greedy 1-step, use by computeNewPosition()
     void moveRandom();         // Frightened mode movement
+
+    bool isDotThresholdReached();
 
 public:
     Ghost(GameState* state, GhostPersonality personality);

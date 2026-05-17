@@ -14,6 +14,11 @@ struct GridPosition {
 
     constexpr GridPosition() : x(0), y(0) {}
     constexpr GridPosition(uint8_t x, uint8_t y) : x(x), y(y) {}
+
+    // Surcharge of == operator for easier comparison of GridPosition objects, useful for ghosts AI and collision detection.
+    constexpr bool operator==(const GridPosition& other) const {
+        return x == other.x && y == other.y;
+    }
 };
 
 enum EntityFacing {
@@ -157,7 +162,7 @@ struct GameState {
     uint8_t level; // Current level, used for loading the correct background and AI mode duration from PROGMEM.
     uint8_t modePhase; // Index in the current mode phase, used for timing and AI mode switching.
     unsigned long lastModeChangeMs;
-    
+
     Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]; // Official grid size from the first game
 
     // Centralized positions of entities for easier access to Ghosts AI movement, instead of searching the grid for them.

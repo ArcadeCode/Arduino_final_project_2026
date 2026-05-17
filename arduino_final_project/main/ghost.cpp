@@ -2,7 +2,32 @@
 
 // Initialization list which is obligatory for constants.
 Ghost::Ghost(GameState* state, GhostPersonality personality)
-    : state(state), personality(personality), mode(GM_Scatter), lastFacing(EF_NORTH) {}
+    : state(state), personality(personality), mode(GM_Scatter), lastFacing(EF_NORTH) {
+        // Set the initial dot threshold for exiting the ghost house based on personality.
+        switch (personality) {
+            case GP_RED:
+                this->dotThreshold = 0; // Blinky starts outside the ghost house.
+                break;
+            case GP_PINK:
+                this->dotThreshold = 0; // Pinky starts inside but exits immediately after Blinky moves out.
+                break;
+            case GP_BLUE:
+                this->dotThreshold = 35; // Inky starts inside and exits after 30-40% of dots are eaten (assuming 244 total dots).
+                break;
+            case GP_ORANGE:
+                this->dotThreshold = 33; // Clyde starts inside and exits after over a third of the dots are eaten (assuming 244 total dots).
+                break;
+        }
+    }
+
+bool Ghost::isDotThresholdReached() {
+    // Calculate the number of dots already eaten
+    uint16_t dotsEaten = this->state->totalDots - this->state->remainingDots;
+    // Calculate the threshold in number of dots eaten (e.g.: 35% of totalDots)
+    uint16_t thresholdDots = (static_cast<uint16_t>(this->state->totalDots) * this->dotThreshold) / 100;
+    // The ghost can move if dotsEaten >= thresholdDots
+    return dotsEaten >= thresholdDots;
+}
 
 void Ghost::moveRandom() {
     EntityFacing opposite = getOpposite(this->lastFacing);
@@ -117,9 +142,25 @@ void Ghost::computeChaseTarget() {
             }
             
             // 2. RED vector → pivot, and extend it twice to get the final target.
+            // Need clamping to the grid size to avoid overflow if pivot is near the border.
             GridPosition red = this->state->redGhostPosition;
-            this->target.x = pivot.x + (pivot.x - red.x);
-            this->target.y = pivot.y + (pivot.y - red.y);
+            int16_t targetX = (int16_t)pivot.x + ((int16_t)pivot.x - (int16_t)red.x);
+            int16_t targetY = (int16_t)pivot.y + ((int16_t)pivot.y - (int16_t)red.y);
+
+            if (targetX < 0) {
+                targetX = 0;
+            } else if (targetX > UINT8_MAX) {
+                targetX = UINT8_MAX;
+            }
+
+            if (targetY < 0) {
+                targetY = 0;
+            } else if (targetY > UINT8_MAX) {
+                targetY = UINT8_MAX;
+            }
+
+            this->target.x = targetX;
+            this->target.y = targetY;
             break;
         }
 
@@ -156,11 +197,15 @@ void Ghost::computeNewTarget() {
 
 
 void Ghost::computeNewPosition() {
-    if (this->mode == GM_Frightened) {
-        this->moveRandom();
-    } else {
-        this->computeNewTarget();
-        this->moveTowardTarget();
+    // Don't move unless dot threshold is reached and the ghost can exit the ghost house.
+    if (this->isDotThresholdReached() == true) {
+        if (this->mode == GM_Frightened) {
+            this->moveRandom();
+        } else {
+            this->computeNewTarget();
+            this->moveTowardTarget();
+        }
+
     }
 }
 
@@ -199,8 +244,10 @@ char* Ghost::getGhostInformations() {
         default:            modeStr = "???";         break;
     }
 
-    sprintf(ghostInfo, "%s ghost (%d, %d) facing: [%c] mode: %s target (%d, %d)",
-        colorStr, this->position.x, this->position.y, facingChar, modeStr, this->target.x, this->target.y);
+    bool isRelease = this->isDotThresholdReached();
+
+    sprintf(ghostInfo, "%s ghost (%d, %d) face: [%c] %s target (%d, %d), on?: %s",
+        colorStr, this->position.x, this->position.y, facingChar, modeStr, this->target.x, this->target.y, isRelease ? "Yes" : "No");
 
     return ghostInfo;
 }
