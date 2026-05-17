@@ -23,6 +23,8 @@ private:
     void computePacmanPosition();
     // Ghosts positions are directly computed in their class and shared to the global state for easier access to ghosts AI movement, instead of searching the grid for them.
 
+    void updateGhostModes();
+
     public:
     Game(/* args */);
     ~Game();
@@ -31,12 +33,11 @@ private:
     GameState& step(); /* Step from one new frame */
     void registerInputs(inputs &newInputs);
 
-    // Level information retrieve
-    void loadLevel(char level);
-
     // Getters for entities positions
     GridPosition get_pacmanPosition() const { return pacmanPosition; }
     EntityFacing get_pacmanFacing() const { return pacmanFacing; }
+
+    GameState& getState() { return this->state; } // Get the current state without stepping.
 
     char* get_blueGhostInformation() const { return blueGhost.getGhostInformations(); }
     char* get_redGhostInformation() const { return redGhost.getGhostInformations(); }

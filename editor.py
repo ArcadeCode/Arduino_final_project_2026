@@ -2,6 +2,38 @@
 """
 Pac-Man Level Editor for Arduino
 Éditeur de niveaux Pac-Man compatible avec la structure Cell[][] Arduino
+
+TODO:
+= Phase 1 - Basic cleanup =
+- English comments.
+- Shard editor.py into different editor/ files.
+- Add versioning to `.json` levels.
+
+= Phase 2 - Declaring rules =
+- Add rules to force having max 4 Ghosts, 1 Pacman, 1 Fruit.
+- Add rule to have maximum 255 Pac-gum + Super pac-gum by level
+- Add the pac-gums counter to the level file
+
+= Phase 3 - Improving UX =
+- Add a "preview screen" where some ghosts and pacman cells is replaced by their Sprites
+    - For remain, each entity is 4 cells large
+    - Sprites will be store into "./editor/assets/"
+- When ctrl+c or other force stop execution signal is send, save current work under ./levels/ and give the user the possibility to reload his work if an error occurred.
+- Add Scroll click to move the grid without using scroll bars.
+- Add version used to exporter C++ ready strings.
+- Add version upgrade system.
+
+= Phase 4 - Assembling multiples levels =
+- Add a `.levels.json` who regroup each level of the game under one file.
+- Add the rule to accept max 10 levels into a level set.
+- Add a custom select menu to choose what level to edit and the order of levels.
+- Add a possibility to import or export individual levels to/from the level set.
+- Give the possibility to export the game file to `levels.hpp` with the level loader function ready.
+
+= Phase 5 - Complex editing =
+- Add parameter to set the facing of Pacman and the Ghosts.
+- Add parameter to set the SCATTER mode target.
+- Add parameter to set timing between AI modes.
 """
 
 import tkinter as tk
@@ -14,13 +46,13 @@ from enum import IntEnum
 
 # ─── Constantes ──────────────────────────────────────────────────────────────
 
-GRID_W = 28   # GAME_GRID_X_AXIS_LEN
-GRID_H = 36   # GAME_GRID_Y_AXIS_LEN
+GRID_W = 28   # GAME_GRID_X_AXIS_LEN  (colonnes, axe horizontal)
+GRID_H = 36   # GAME_GRID_Y_AXIS_LEN  (lignes,   axe vertical)
 
-CELL_SIZE_MIN  =  6   # px minimum par cellule
+CELL_SIZE_MIN     =  6   # px minimum par cellule
 CELL_SIZE_DEFAULT = 18
-CELL_SIZE_MAX  = 48   # px maximum par cellule
-ZOOM_STEP      =  2   # incrément de zoom
+CELL_SIZE_MAX     = 48   # px maximum par cellule
+ZOOM_STEP         =  2   # incrément de zoom
 
 # ─── Enums identiques au C++ ─────────────────────────────────────────────────
 
@@ -82,18 +114,27 @@ class Cell:
 # ─── Grille ──────────────────────────────────────────────────────────────────
 
 def empty_grid() -> List[List[Cell]]:
-    """Crée une grille vide GRID_W × GRID_H (indexée [x][y])"""
+    """Crée une grille vide GRID_W × GRID_H, indexée [x][y]
+    x = colonne (0..GRID_W-1), y = ligne (0..GRID_H-1)"""
     return [[Cell() for _ in range(GRID_H)] for _ in range(GRID_W)]
 
 # ─── Conversion C++ ──────────────────────────────────────────────────────────
+
 def grid_to_cpp(grid: List[List[Cell]], var_name: str = "grid") -> str:
-    """Convertit la grille en code C++ Cell grid[28][36]"""
+    """Convertit la grille en code C++.
+
+    Convention C++ (types.hpp) : Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]
+    → premier indice = y (ligne), second indice = x (colonne) → grid[y][x].
+
+    En mémoire Python la grille est stockée grid[x][y], on transpose ici.
+    GridPosition est {x, y} dans le C++, on garde donc x et y dans cet ordre.
+    """
     lines = [
         "// Niveau généré par Pac-Man Level Editor",
         f"// Taille : {GRID_W}×{GRID_H}",
         "",
-        f"void loadLevel(char level) {{",
-        f"    memset(state.grid, 0, sizeof(state.grid));",
+        "void loadLevel(GameState& state, char level) {",
+        "    memset(state.grid, 0, sizeof(state.grid));",
         "",
     ]
 
@@ -105,17 +146,20 @@ def grid_to_cpp(grid: List[List[Cell]], var_name: str = "grid") -> str:
         ENT.ORANGE_GHOST: None,
     }
 
+    # On itère y en externe, x en interne → ordre naturel de lecture du niveau.
+    # L'accès Python reste grid[x][y], mais les indices C++ émis sont [y][x].
     for y in range(GRID_H):
         for x in range(GRID_W):
             cell = grid[x][y]
             if cell.data != 0:
                 parts = []
-                bg = cell.get_bg()
+                bg  = cell.get_bg()
                 ent = cell.get_ent()
                 if bg != BG.EMPTY:
-                    parts.append(f"this->state.grid[{x}][{y}].setBackground({bg_cpp_name(bg)})")
+                    # C++ : grid[y][x]
+                    parts.append(f"state.grid[{y}][{x}].setBackground({bg_cpp_name(bg)})")
                 if ent != ENT.EMPTY:
-                    parts.append(f"this->state.grid[{x}][{y}].setEntity({ent_cpp_name(ent)})")
+                    parts.append(f"state.grid[{y}][{x}].setEntity({ent_cpp_name(ent)})")
                     if ent == ENT.PACMAN:
                         pacman_pos = (x, y)
                     elif ent in ghost_positions:
@@ -127,52 +171,69 @@ def grid_to_cpp(grid: List[List[Cell]], var_name: str = "grid") -> str:
     lines.append("    // Positions initiales")
 
     if pacman_pos:
-        lines.append(f"    this->pacmanPosition = {{{pacman_pos[0]}, {pacman_pos[1]}}};")
+        # GridPosition est struct { uint8_t x; uint8_t y; } → {x, y}
+        lines.append(f"    state.pacmanPosition = {{{pacman_pos[0]}, {pacman_pos[1]}}};")
 
     ghost_setters = {
-        ENT.BLUE_GHOST:   "this->blueGhost.setPosition",
-        ENT.RED_GHOST:    "this->redGhost.setPosition",
-        ENT.PINK_GHOST:   "this->pinkGhost.setPosition",
-        ENT.ORANGE_GHOST: "this->orangeGhost.setPosition",
+        ENT.BLUE_GHOST:   "state.blueGhostPosition",
+        ENT.RED_GHOST:    "state.redGhostPosition",
+        ENT.PINK_GHOST:   "state.pinkGhostPosition",
+        ENT.ORANGE_GHOST: "state.orangeGhostPosition",
     }
     for ent, setter in ghost_setters.items():
         pos = ghost_positions[ent]
         if pos:
-            lines.append(f"    {setter}({{{pos[0]}, {pos[1]}}});")
+            lines.append(f"    {setter} = {{{pos[0]}, {pos[1]}}};")
+    
+    lines.append(f"    state.totalDots = 244;")
+    lines.append(f"    state.remainingDots = 244;")
+    lines.append(f"    state.level = level;")
 
     lines.append("}")
     return "\n".join(lines)
 
+
 def grid_to_raw_array(grid: List[List[Cell]]) -> str:
-    """Convertit la grille en tableau C++ brut Cell grid[28][36] = {...}"""
+    """Convertit la grille en tableau C++ brut.
+
+    Convention C++ (types.hpp) : Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]
+    → le tableau exporté est donc [GRID_H][GRID_W], première dimension = y (ligne).
+
+    En mémoire Python la grille est grid[x][y], on transpose ici à l'export.
+    """
     lines = [
         "// Niveau généré par Pac-Man Level Editor",
-        f"// Taille : {GRID_W}×{GRID_H} — Indexé [x][y]",
+        f"// Taille : {GRID_H}×{GRID_W} — Indexé [y][x] comme grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]",
         "",
-        f"const uint8_t level_data[{GRID_W}][{GRID_H}] = {{",
+        f"const uint8_t level_data[{GRID_H}][{GRID_W}] = {{",
     ]
-    for y in range(GRID_W):
-        row_vals = ", ".join(f"0x{grid[x][y].data:02X}" for y in range(GRID_H))
-        comma = "," if x < GRID_W - 1 else ""
-        lines.append(f"    {{{row_vals}}}{comma}  // x={x}")
+    for y in range(GRID_H):
+        row_vals = ", ".join(f"0x{grid[x][y].data:02X}" for x in range(GRID_W))
+        comma = "," if y < GRID_H - 1 else ""
+        lines.append(f"    {{{row_vals}}}{comma}  // y={y}")
     lines.append("};")
     lines.append("")
     lines.append("// Pour charger :")
-    lines.append("// for(int x=0;x<GAME_GRID_X_AXIS_LEN;x++)")
-    lines.append("//   for(int y=0;y<GAME_GRID_Y_AXIS_LEN;y++)")
-    lines.append("//     state.grid[x][y].data = level_data[x][y];")
+    lines.append("// for(int y=0;y<GAME_GRID_Y_AXIS_LEN;y++)")
+    lines.append("//   for(int x=0;x<GAME_GRID_X_AXIS_LEN;x++)")
+    lines.append("//     state.grid[y][x].data = level_data[y][x];")
     return "\n".join(lines)
 
+
 def grid_to_ascii(grid: List[List[Cell]]) -> str:
-    """Représentation ASCII de la grille (y en premier pour lisibilité)"""
+    """Représentation ASCII de la grille.
+    On itère sur les lignes (y) en externe pour que chaque ligne de texte
+    corresponde à une rangée horizontale de l'écran."""
     rows = []
-    for y in range(GRID_H):
-        row = "".join(grid[x][y].to_char() for x in range(GRID_W))
+    for y in range(GRID_H):                      # y = ligne (vertical)
+        row = "".join(grid[x][y].to_char() for x in range(GRID_W))  # x = colonne (horizontal)
         rows.append(row)
     return "\n".join(rows)
 
+
 def ascii_to_grid(text: str) -> Optional[List[List[Cell]]]:
-    """Parse une grille ASCII → Cell[][]"""
+    """Parse une grille ASCII → Cell[x][y]
+    Chaque ligne de texte = une rangée y, chaque caractère = une colonne x."""
     char_map = {
         '#': (BG.WALL,     ENT.EMPTY),
         '.': (BG.GUM,      ENT.EMPTY),
@@ -186,31 +247,41 @@ def ascii_to_grid(text: str) -> Optional[List[List[Cell]]]:
         'F': (BG.EMPTY,    ENT.FRUIT),
     }
     lines = text.split('\n')
-    # Ajuster ou tronquer
     while len(lines) < GRID_H:
         lines.append('')
     grid = empty_grid()
-    for y, line in enumerate(lines[:GRID_H]):
-        for x, ch in enumerate(line[:GRID_W]):
+    for y, line in enumerate(lines[:GRID_H]):         # y = index de ligne
+        for x, ch in enumerate(line[:GRID_W]):        # x = index de colonne
             if ch in char_map:
                 bg, ent = char_map[ch]
                 grid[x][y].set_bg(bg)
                 grid[x][y].set_ent(ent)
     return grid
 
+
 def raw_array_to_grid(text: str) -> Optional[List[List[Cell]]]:
-    """Parse un tableau C++ brut uint8_t level_data[28][36]"""
-    hex_vals = re.findall(r'0[xX][0-9a-fA-F]+|\d+', text)
-    vals = [int(v, 16) if v.lower().startswith('0x') else int(v) for v in hex_vals]
+    """Parse un tableau C++ brut exporté par grid_to_raw_array().
+
+    Le tableau source est [GRID_H][GRID_W] (dimension externe = y),
+    on le recharge en mémoire Python comme grid[x][y].
+    """
+    # 1. Supprimer les commentaires C++ (// ...) — évite de parser les indices y=N
+    stripped = re.sub(r'//[^\n]*', '', text)
+    # 2. Supprimer les lignes de déclaration C (const uint8_t ..., for(...), etc.)
+    #    qui contiennent des nombres parasites comme les dimensions [36][28].
+    stripped = re.sub(r'(const\s+\w+.*?=\s*\{|for\s*\(.*?\)|#\w+[^\n]*)', '', stripped)
+    hex_vals = re.findall(r'0[xX][0-9a-fA-F]+', stripped)  # uniquement hex 0x.. pour éviter tout entier parasite
+    vals = [int(v, 16) for v in hex_vals]
     if len(vals) < GRID_W * GRID_H:
         return None
     grid = empty_grid()
     idx = 0
-    for x in range(GRID_W):
-        for y in range(GRID_H):
+    for y in range(GRID_H):      # dimension externe du tableau C++ = y
+        for x in range(GRID_W):  # dimension interne = x
             grid[x][y] = Cell(vals[idx])
             idx += 1
     return grid
+
 
 def bg_cpp_name(bg: BG) -> str:
     return {BG.WALL: "BG_WALL", BG.GUM: "BG_GUM",
@@ -498,7 +569,6 @@ class PacManEditor(tk.Tk):
         label, bg, ent = PALETTE_ITEMS[idx]
         self.selected_bg  = bg
         self.selected_ent = ent
-        # Mise à jour visuelle des boutons
         for i, (btn) in enumerate(self.palette_buttons):
             _, bg_i, ent_i = PALETTE_ITEMS[i]
             fill, _, _ = CELL_COLORS.get((bg_i, ent_i), ("#333", "?", "?"))
@@ -512,15 +582,19 @@ class PacManEditor(tk.Tk):
     def _refresh_canvas(self):
         self.canvas.delete("all")
         cs = self.cell_size
-        total_w = GRID_W * cs
-        total_h = GRID_H * cs
+        # La zone de défilement couvre GRID_W colonnes × GRID_H lignes
+        total_w = GRID_W * cs   # largeur  = nb colonnes × taille cellule
+        total_h = GRID_H * cs   # hauteur  = nb lignes   × taille cellule
         self.canvas.configure(scrollregion=(0, 0, total_w, total_h))
-        for x in range(GRID_W):
-            for y in range(GRID_H):
+
+        for x in range(GRID_W):           # x = colonne → position horizontale
+            for y in range(GRID_H):       # y = ligne   → position verticale
                 cell = self.grid_data[x][y]
                 fill, sym, _ = cell_visual(cell)
-                x0, y0 = x * cs, y * cs
-                x1, y1 = x0 + cs, y0 + cs
+                x0 = x * cs   # pixel gauche  (dépend de la colonne x)
+                y0 = y * cs   # pixel haut    (dépend de la ligne   y)
+                x1 = x0 + cs
+                y1 = y0 + cs
                 self.canvas.create_rectangle(x0, y0, x1, y1,
                                              fill=fill, outline="#0D0D20", width=1)
                 if sym and cs >= 10:
@@ -529,21 +603,25 @@ class PacManEditor(tk.Tk):
                         text=sym, fill="#FFFFFF",
                         font=("Courier", max(7, cs - 8), "bold")
                     )
+
         # Grille de guidage légère (tous les 4 blocs)
-        for x in range(0, GRID_W + 1, 4):
-            self.canvas.create_line(x * cs, 0, x * cs, total_h,
+        for gx in range(0, GRID_W + 1, 4):
+            self.canvas.create_line(gx * cs, 0, gx * cs, total_h,
                                     fill="#1A1A35", width=1)
-        for y in range(0, GRID_H + 1, 4):
-            self.canvas.create_line(0, y * cs, total_w, y * cs,
+        for gy in range(0, GRID_H + 1, 4):
+            self.canvas.create_line(0, gy * cs, total_w, gy * cs,
                                     fill="#1A1A35", width=1)
         self._update_stats()
 
     def _redraw_cell(self, x: int, y: int):
+        """Redessine une seule cellule à la position (x=colonne, y=ligne)."""
         cs = self.cell_size
         cell = self.grid_data[x][y]
         fill, sym, _ = cell_visual(cell)
-        x0, y0 = x * cs, y * cs
-        x1, y1 = x0 + cs, y0 + cs
+        x0 = x * cs   # pixel gauche  (colonne x)
+        y0 = y * cs   # pixel haut    (ligne   y)
+        x1 = x0 + cs
+        y1 = y0 + cs
         self.canvas.create_rectangle(x0, y0, x1, y1,
                                      fill=fill, outline="#0D0D20", width=1)
         if sym and cs >= 10:
@@ -555,9 +633,9 @@ class PacManEditor(tk.Tk):
     # ── Événements souris ────────────────────────────────────────────────────
 
     def _canvas_to_cell(self, event):
-        # Tenir compte du scroll du canvas
-        cx = self.canvas.canvasx(event.x)
-        cy = self.canvas.canvasy(event.y)
+        """Convertit les coordonnées pixel du canvas en (x=colonne, y=ligne)."""
+        cx = self.canvas.canvasx(event.x)   # pixel horizontal → colonne x
+        cy = self.canvas.canvasy(event.y)   # pixel vertical   → ligne   y
         x = int(cx) // self.cell_size
         y = int(cy) // self.cell_size
         if 0 <= x < GRID_W and 0 <= y < GRID_H:
@@ -586,7 +664,6 @@ class PacManEditor(tk.Tk):
         self._apply_zoom()
 
     def _on_ctrl_wheel(self, event):
-        """Ctrl+Molette = zoom (Windows/Mac)"""
         if event.delta > 0:
             self._zoom_in()
         else:
@@ -657,10 +734,10 @@ class PacManEditor(tk.Tk):
             for y in range(GRID_H):
                 c = self.grid_data[x][y]
                 bg, ent = c.get_bg(), c.get_ent()
-                if bg == BG.WALL:     walls     += 1
-                if bg == BG.GUM:      gums      += 1
-                if bg == BG.ENERGIZE: energize  += 1
-                if ent != ENT.EMPTY:  entities  += 1
+                if bg == BG.WALL:     walls    += 1
+                if bg == BG.GUM:      gums     += 1
+                if bg == BG.ENERGIZE: energize += 1
+                if ent != ENT.EMPTY:  entities += 1
         self.stat_labels["Murs"].configure(text=str(walls))
         self.stat_labels["Pac-gums"].configure(text=str(gums))
         self.stat_labels["Super gums"].configure(text=str(energize))
@@ -703,10 +780,12 @@ class PacManEditor(tk.Tk):
         )
         if not path:
             return
-        data = [[self.grid_data[x][y].data for y in range(GRID_H)]
-                for x in range(GRID_W)]
+        # Sérialisation format v1 : grid[y][x], première dimension = y (ligne).
+        # Cohérent avec types.hpp : Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN].
+        data = [[self.grid_data[x][y].data for x in range(GRID_W)]
+                for y in range(GRID_H)]
         with open(path, "w") as f:
-            json.dump({"width": GRID_W, "height": GRID_H, "grid": data}, f)
+            json.dump({"version": 1, "width": GRID_W, "height": GRID_H, "grid": data}, f)
         messagebox.showinfo("Sauvegardé", f"Niveau sauvegardé :\n{path}")
 
     def _load_json(self):
@@ -720,13 +799,28 @@ class PacManEditor(tk.Tk):
             with open(path) as f:
                 obj = json.load(f)
             raw = obj["grid"]
+            version = obj.get("version", 0)
             self._push_history()
             self.grid_data = empty_grid()
-            for x in range(min(GRID_W, len(raw))):
-                for y in range(min(GRID_H, len(raw[x]))):
-                    self.grid_data[x][y] = Cell(raw[x][y])
+            if version >= 1:
+                # Format v1+ : raw[y][x], première dimension = y (ligne)
+                for y in range(min(GRID_H, len(raw))):
+                    for x in range(min(GRID_W, len(raw[y]))):
+                        self.grid_data[x][y] = Cell(raw[y][x])
+            else:
+                # Format v0 (legacy) : raw[x][y], première dimension = x (colonne)
+                # Utiliser migrate_levels.py --from 0 --to 1 pour migrer définitivement.
+                for x in range(min(GRID_W, len(raw))):
+                    for y in range(min(GRID_H, len(raw[x]))):
+                        self.grid_data[x][y] = Cell(raw[x][y])
+                messagebox.showwarning(
+                    "Format v0 détecté",
+                    "Ce fichier est au format v0 (axes inversés).\n"
+                    "Utilisez migrate_levels.py --from 0 --to 1 pour le migrer.\n"
+                    "Il a été chargé correctement mais sera sauvegardé en v1."
+                )
             self._refresh_canvas()
-            messagebox.showinfo("Chargé", f"Niveau chargé :\n{path}")
+            messagebox.showinfo("Chargé", f"Niveau chargé (v{version}) :\n{path}")
         except Exception as e:
             messagebox.showerror("Erreur", str(e))
 

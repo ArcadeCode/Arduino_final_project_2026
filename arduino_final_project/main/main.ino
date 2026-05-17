@@ -1,6 +1,7 @@
 #include "game.hpp"
 #include "inputs.hpp"
 #include "screen.hpp"
+#include "levels.hpp"
 
 #include <Arduino.h> // Only for the freeMemory function
 
@@ -35,35 +36,36 @@ Game* game = nullptr;
 Screen* screen = nullptr;
 
 void setup() {
-    // 0. Starting the Serial Monitor
+    // 0. Starting the Serial Monitor & set a random seed
     Serial.begin(19200);
-
-    Serial.print(F("Avant new Game: "));
-    Serial.println(freeMemory());
-
-    Serial.println("BOOT OK");
+    randomSeed(analogRead(A0)); // True randomness using electric noise on A0 pin;
+    Serial.println(F("BOOT OK"));
 
     // 1. Creating a new Game object
     game = new Game(); // Allocation on the heap
-    Serial.println("Game allocated");
-
-    Serial.print(F("Apres new Game: "));
-    Serial.println(freeMemory());
-
-    // 2. Constructing the Game object with default values
-    game->start(); // Construct GameState 0 and put dummy values in each entities positions
-    Serial.println("Game started");
+    Serial.println(F("Game allocated"));
     
-    Serial.print(F("Apres Game initialisation: "));
+    Serial.print(F("Memory : "));
     Serial.println(freeMemory());
+
+    // 4. Constructing the Game object with default values
+    game->start(); // Construct GameState 0 and put dummy values in each entities positions
+    Serial.println(F("Game started"));
     
     // 3. Loading the default level
-    game->loadLevel(0); // Load debug level
+    loadLevel(game->getState(), 0); // Load debug level directly in the global state to save memory and avoid stack overflow from loading a level in Game::start().
+    Serial.println(F("Level 0 loaded in GameState"));
+
+    Serial.print(F("Memory : "));
+    Serial.println(freeMemory());
+    
+    
 
     // 4. Creating a new Screen object
     screen = new Screen(); // Allocation on the heap
-    Serial.println("Screen allocated");
-    Serial.print(F("Apres new Screen: "));
+    Serial.println(F("Screen allocated"));
+
+    Serial.print(F("Memory : "));
     Serial.println(freeMemory());
 }
 
@@ -73,7 +75,7 @@ void loop() {
 
     /// 2. SENDING STATE TO THE OUTPUT SCREEN ///
     screen->print_frame(state);
-
+    
     // 2.1 Debugging informations
     // NOTE: This debug section can consume a lot of ram,
     // there was a lot of stack overflow error from here.
@@ -82,6 +84,12 @@ void loop() {
     Serial.print(F(" | RAM: "));
     Serial.print(freeMemory());
     Serial.println(F(" bytes"));
+
+    // Print the remaining dots count
+    Serial.print(F("Remaining dots: "));
+    Serial.print(state.remainingDots);
+    Serial.print(F("/"));
+    Serial.println(state.totalDots);
 
     // Print pacman position & facing
     Serial.print(F("Pacman (x, y): "));

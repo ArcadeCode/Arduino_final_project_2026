@@ -107,6 +107,23 @@ struct Cell {
     }
 };
 
+/**
+ * @brief AI Mode durations in seconds for each level, stored in PROGMEM to save SRAM.
+ * 
+ * Each row corresponds to a level (1, 2-4, 5+), and each column corresponds to a mode phase
+ * (Scatter 1, Chase 1, Scatter 2, Chase 2, Scatter 3, Chase 3, Scatter 4, Chase 4).
+ * The last phase (Chase 4) has a duration of 0, which means that the ghosts will stay
+ * in Chase mode indefinitely after the last Scatter phase.
+ * 
+ * @source The Pac-Man dossiers by Jamey Pittman
+ */
+static const uint16_t MODE_DURATIONS[3][8] PROGMEM = {
+//  Sc  Ch   Sc  Ch   Sc   Ch    Sc     Ch
+    {7,  20,  7,  20,  5,   20,   5,    0},  // Level 1
+    {7,  20,  7,  20,  5, 1033,   1,    0},  // Levels 2-4
+    {5,  20,  5,  20,  5, 1037,   1,    0},  // Levels 5+
+};
+
 struct GameState {
     // TODO: OPTIMISATION MÉMOIRE (priorité haute, ~990 octets à économiser)
     //
@@ -136,7 +153,11 @@ struct GameState {
     // Résultat attendu : GameState ~20 octets, ~1400 octets libres en loop.
 
     // Tick counter, incremented at each game step, is used for timing and animations.
-    unsigned long tick;
+    uint16_t tick;
+    uint8_t level; // Current level, used for loading the correct background and AI mode duration from PROGMEM.
+    uint8_t modePhase; // Index in the current mode phase, used for timing and AI mode switching.
+    unsigned long lastModeChangeMs;
+    
     Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]; // Official grid size from the first game
 
     // Centralized positions of entities for easier access to Ghosts AI movement, instead of searching the grid for them.
@@ -146,10 +167,72 @@ struct GameState {
     GridPosition redGhostPosition;
     GridPosition pinkGhostPosition;
     GridPosition orangeGhostPosition;
+    uint8_t totalDots;
+    uint8_t remainingDots;
 
-    GameState() : tick(0), pacmanPosition({0, 0}), blueGhostPosition({0, 0}), redGhostPosition({0, 0}), pinkGhostPosition({0, 0}), orangeGhostPosition({0, 0}), pacmanFacing(EF_NORTH) {
+    GameState() : tick(0), level(0),modePhase(0),pacmanPosition({0, 0}), blueGhostPosition({0, 0}), redGhostPosition({0, 0}), pinkGhostPosition({0, 0}), orangeGhostPosition({0, 0}), pacmanFacing(EF_NORTH), totalDots(0), remainingDots(0) {
         // Initialize the grid with empty cells (0b00000000) which is BG_EMPTY + ENT_EMPTY
         // We use memset which is fastest to initialize a grid of Cell.
         memset(grid, 0, sizeof(grid));
     }
+};
+
+/**
+ * @brief Get the neighboring position in the given direction.
+ */
+inline GridPosition getNeighbor(GridPosition pos, EntityFacing dir) {
+    switch (dir) {
+        case EF_NORTH: return {pos.x, pos.y - 1};
+        case EF_SOUTH: return {pos.x, pos.y + 1};
+        case EF_EAST:  return {pos.x + 1, pos.y};
+        case EF_WEST:  return {pos.x - 1, pos.y};
+        default:       return pos; // No movement if direction is invalid
+    }
+};
+
+/**
+ * @brief Get the opposite direction.
+ * 
+ * @note This mean, what the opposite direction of the one which is facing.
+ */
+inline EntityFacing getOpposite(EntityFacing dir) {
+    switch(dir) {
+        case EF_NORTH: return EF_SOUTH;
+        case EF_SOUTH: return EF_NORTH;
+        case EF_EAST:  return EF_WEST;
+        case EF_WEST:  return EF_EAST;
+        default:       return dir; // No movement if direction is invalid
+    }
+};
+
+/**
+ * @brief Calculate the squared distance between two grid positions.
+ */
+inline uint16_t squaredDistance(GridPosition a, GridPosition b) {
+    int8_t dx = (int8_t)a.x - (int8_t)b.x;
+    int8_t dy = (int8_t)a.y - (int8_t)b.y;
+    return (uint16_t)(dx * dx) + (uint16_t)(dy * dy);
+}
+
+/**
+ * @brief Check if a position is walkable (not a wall and within bounds).
+ */
+inline bool isWalkable(const GameState* state, GridPosition pos) {
+    if (pos.x >= GAME_GRID_X_AXIS_LEN || pos.y >= GAME_GRID_Y_AXIS_LEN) {
+        return false; // Out of bounds
+    }
+    // No need to check for pos < 0 because pos is unsigned (uint8_t)
+    
+    if (state->grid[pos.y][pos.x].getBackground() == BG_WALL) {
+        return false; // Not walkable if it's a wall
+    }
+
+    // TODO: FIXME: CLEAN THIS WHEN SWITCHING TO PROGMEM BACKGROUND AND ENTITY POSITION ONLY
+    if (state->grid[pos.y][pos.x].getEntity() != ENT_EMPTY) {
+        return false; // Not walkable if there is an entity
+    }
+    // In the original game, ghosts can walk on the same cell,
+    // this will be fix when we will switch to entity position only and not grid anymore.
+
+    return true; // Walkable if it's not a wall and there is no entity
 };

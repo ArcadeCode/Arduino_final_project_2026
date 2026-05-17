@@ -1,10 +1,6 @@
 #include "screen.hpp"
 
-Screen::Screen() {
-    //
-}
-
-Screen::~Screen() = default;
+Screen::Screen() = default;
 
 /**
  * @brief Print a frame of the current game state in the Serial Monitor
@@ -25,7 +21,7 @@ void Screen::print_frame(GameState &state) {
     for (uint8_t y = 0; y < GAME_GRID_Y_AXIS_LEN; y++) {
         for (uint8_t x = 0; x < GAME_GRID_X_AXIS_LEN; x++) {
             // For each line
-            serial_s[x + 1] = state.grid[x][y].toChar();
+            serial_s[x + 1] = state.grid[y][x].toChar();
         }
         Serial.print(serial_s); // Print the line
     }

@@ -76,7 +76,6 @@ enum GhostAiMode {
 class Ghost {
 private:
     GridPosition position;
-    GridPosition lastPosition; // Used for computing
     GridPosition target;
     EntityFacing lastFacing; // Used for computing
     const GhostPersonality personality;
@@ -87,6 +86,9 @@ private:
     // Determine where the ghost face by comparing is last and now position.
     // It's vital cause Ghosts cannot wall back on them footsteps.
     EntityFacing whereDirectionGhostFace();
+
+    void moveTowardTarget();   // greedy 1-step, use by computeNewPosition()
+    void moveRandom();         // Frightened mode movement
 
 public:
     Ghost(GameState* state, GhostPersonality personality);

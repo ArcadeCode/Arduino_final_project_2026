@@ -8,7 +8,7 @@ private:
     /* data */
 public:
     Screen(/* args */);
-    ~Screen();
+    ~Screen() = default;
 
     void print_frame(GameState &state);
 };
