@@ -2,6 +2,7 @@
 #include <Arduino.h> // For uint8_t type
 #define GAME_GRID_X_AXIS_LEN 28
 #define GAME_GRID_Y_AXIS_LEN 36
+#define GHOSTS_COUNT 4
 
 /*
 Simple solution because we need tuples of 2D positions in some part of the code
@@ -20,6 +21,31 @@ struct GridPosition {
         return x == other.x && y == other.y;
     }
 };
+
+// Level parameters struct, used when loading a level.
+struct LevelParams {
+    const uint8_t* background; // Pointer to LEVEL_X_BG (PROGMEM)
+    GridPosition pacmanStart;
+    GridPosition ghostStarts[4]; // 4 Ghosts: Red, Pink, Blue, Orange
+    uint16_t totalDots;
+    // Add more parameters here if needed (e.g., fruit spawn positions and timings)
+};
+
+// Macro to access a field of the LEVELS_PARAMETERS array in PROGMEM.
+#define LEVEL_PARAMS_FIELD(level, field) \
+    pgm_read_byte(&(LEVELS_PARAMETERS[level].field))
+
+// Macro to access an array of positions (e.g., ghostStarts)
+#define LEVEL_PARAMS_POSITION(level, index, field) \
+    pgm_read_byte(&(LEVELS_PARAMETERS[level].ghostStarts[index].field))
+
+// Macro to access the background of a level
+#define LEVEL_BG_READ(level, x, y) \
+    ({ \
+        const uint8_t* bg_ptr = LEVELS_PARAMETERS[level].background; \
+        uint8_t packed = pgm_read_byte(&bg_ptr[y * (GAME_GRID_X_AXIS_LEN / 4) + (x >> 2)]); \
+        (CellBackgroundType)((packed >> ((x & 0x03) << 1)) & 0x03); \
+    })
 
 enum EntityFacing {
     EF_NORTH,
@@ -44,6 +70,16 @@ enum CellBackgroundType {
     BG_GUM=2,     // In french it's called : "Pac-gum"
     BG_ENERGIZE=3 // In french it's called : "Super pac-gum"
 };
+
+inline char cellBackgroundToChar(CellBackgroundType bg) {
+    switch (bg) {
+        case BG_EMPTY:    return ' ';
+        case BG_WALL:     return '#';
+        case BG_GUM:      return '.';
+        case BG_ENERGIZE: return '*';
+        default:          return '?';
+    }
+}
 
 enum CellEntitiesType {
     /* Due to Arduino ram limitations, the overlapping
@@ -129,57 +165,90 @@ static const uint16_t MODE_DURATIONS[3][8] PROGMEM = {
     {5,  20,  5,  20,  5, 1037,   1,    0},  // Levels 5+
 };
 
+/**
+ * @brief Read a cell background from a PROGMEM level array.
+ *
+ * @param level_bg  Pointer to a LEVEL_x_BG array (e.g. LEVEL_0_BG).
+ * // TODO: Replace level_bg for level index and read the background from the current level.
+ * The real ptr to level will be store in level.hpp.
+ * @param x         Column (0..GAME_GRID_X_AXIS_LEN-1).
+ * @param y         Row    (0..GAME_GRID_Y_AXIS_LEN-1).
+ * @return CellBackgroundType
+ */
+inline CellBackgroundType readLevelBackground(
+    const uint8_t level_bg[][GAME_GRID_X_AXIS_LEN / 4],
+    uint8_t x, uint8_t y)
+{
+    uint8_t packed = pgm_read_byte(&level_bg[y][x >> 2]);
+    return (CellBackgroundType)((packed >> ((x & 0x03) << 1)) & 0x03);
+}
+
+/**
+ * @brief Write a cell background to a PROGMEM level array.
+ *
+ * @param level_bg  Pointer to a LEVEL_x_BG array (e.g. LEVEL_0_BG).
+ * @param x         Column (0..GAME_GRID_X_AXIS_LEN-1).
+ * @param y         Row    (0..GAME_GRID_Y_AXIS_LEN-1).
+ * @return nothing
+ */
+inline void writeLevelBackground(
+    uint8_t level_bg[][GAME_GRID_X_AXIS_LEN / 4],
+    uint8_t x, uint8_t y, CellBackgroundType bg)
+{
+    uint8_t &packed = level_bg[y][x >> 2];
+    uint8_t mask = 0x03 << ((x & 0x03) << 1);
+    packed = (packed & ~mask) | ((bg & 0x03) << ((x & 0x03) << 1));
+}
+
+/**
+ * @brief The GameState struct holds all the information about the current state of the game.
+ * It is used by the Game class to update the game state and by the Ghosts to compute their targets and movements.
+ * Due to memory limitations, we store the background in PROGMEM and we only keep the positions of entities in the GameState.
+ */
 struct GameState {
-    // TODO: OPTIMISATION MÉMOIRE (priorité haute, ~990 octets à économiser)
-    //
-    // Problème actuel : grid[][] occupe 28×36 = 1008 octets de heap, sur un
-    // total de 2048 octets de SRAM disponibles sur ATmega328P. Cela laisse
-    // ~479 octets pour toute la call stack de loop(), ce qui provoque un
-    // stack overflow silencieux (freeMemory() == 0 en loop).
-    //
-    // Solution à implémenter :
-    //
-    // ÉTAPE 1 — Déplacer le background en Flash (PROGMEM) dans levels.hpp :
-    //   const uint8_t LEVEL_0[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN] PROGMEM = { ... };
-    //   Lecture : pgm_read_byte(&LEVEL_0[y][x])
-    //   Gain : 1008 octets de SRAM récupérés
-    //
-    // ÉTAPE 2 — Supprimer grid[][] de GameState, ne garder que les positions
-    //   des entités (pacman + 4 fantômes + fruit), soit ~20 octets au total :
-    //   GridPosition pacman;
-    //   GridPosition ghosts[4];
-    //   GridPosition fruit;
-    //   bool fruitActive;
-    //
-    // ÉTAPE 3 — Adapter Screen::print_frame() pour reconstruire la vue à la
-    //   volée en combinant PROGMEM (background) + positions (entités),
-    //   sans jamais matérialiser la grille complète en RAM.
-    //
-    // Résultat attendu : GameState ~20 octets, ~1400 octets libres en loop.
+    // TODO: Implement a simple Pacman struct.
+    // TODO: Store ghosts in an array.
 
-    // Tick counter, incremented at each game step, is used for timing and animations.
-    uint16_t tick;
-    uint8_t level; // Current level, used for loading the correct background and AI mode duration from PROGMEM.
+    uint16_t tick; // Tick counter, incremented at each game step, is used for timing and animations.
+    unsigned long lastModeChangeMs; // Timestamp of the last mode change, used to determine when to switch modes based on MODE_DURATIONS.
+    
+    // Variables set by levels.hpp when loading a level, used for timing and AI mode switching.
+    uint8_t level; // Current level, set by levels.hpp when loading a level, used for timing and AI mode switching.
     uint8_t modePhase; // Index in the current mode phase, used for timing and AI mode switching.
-    unsigned long lastModeChangeMs;
-
-    Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]; // Official grid size from the first game
-
+    uint8_t totalDots;
+    uint8_t remainingDots;
+    
     // Centralized positions of entities for easier access to Ghosts AI movement, instead of searching the grid for them.
     GridPosition pacmanPosition;
     EntityFacing pacmanFacing;
-    GridPosition blueGhostPosition;
-    GridPosition redGhostPosition;
-    GridPosition pinkGhostPosition;
-    GridPosition orangeGhostPosition;
-    uint8_t totalDots;
-    uint8_t remainingDots;
+    GridPosition ghostPositions[GHOSTS_COUNT]; // 0: Red, 1: Pink, 2: Blue, 3: Orange
 
-    GameState() : tick(0), level(0),modePhase(0),pacmanPosition({0, 0}), blueGhostPosition({0, 0}), redGhostPosition({0, 0}), pinkGhostPosition({0, 0}), orangeGhostPosition({0, 0}), pacmanFacing(EF_NORTH), totalDots(0), remainingDots(0) {
-        // Initialize the grid with empty cells (0b00000000) which is BG_EMPTY + ENT_EMPTY
-        // We use memset which is fastest to initialize a grid of Cell.
-        memset(grid, 0, sizeof(grid));
+    GameState() : tick(0), level(0),modePhase(0),pacmanPosition({0, 0}), ghostPositions{{0, 0}, {0, 0}, {0, 0}, {0, 0}}, pacmanFacing(EF_NORTH), totalDots(0), remainingDots(0) {}
+};
+
+/**
+ * @brief Get all entities on a given cell.
+ */
+inline CellEntitiesType* getCellEntities(const GameState* state, uint8_t x, uint8_t y) {
+    CellEntitiesType entities[6] = {}; // We can have at most 6 entities on a cell (Pacman, 4 ghosts, 1 fruit) but due 
+
+    if (state->pacmanPosition == GridPosition(x, y)) {
+        entities[0] = ENT_PACMAN;
+    } else {
+        for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
+            if (state->ghostPositions[i] == GridPosition(x, y)) {
+                switch (i) {
+                    case 0: entities[1] = ENT_RED_GHOST; break;
+                    case 1: entities[2] = ENT_PINK_GHOST; break;
+                    case 2: entities[3] = ENT_BLUE_GHOST; break;
+                    case 3: entities[4] = ENT_ORANGE_GHOST; break;
+                }
+                break; // Stop checking after finding the first ghost on the cell
+            }
+        }
     }
+
+    return entities;
 };
 
 /**
@@ -228,16 +297,9 @@ inline bool isWalkable(const GameState* state, GridPosition pos) {
     }
     // No need to check for pos < 0 because pos is unsigned (uint8_t)
     
-    if (state->grid[pos.y][pos.x].getBackground() == BG_WALL) {
+    if (readLevelBackground(state->level, pos.x, pos.y) == BG_WALL) {
         return false; // Not walkable if it's a wall
     }
-
-    // TODO: FIXME: CLEAN THIS WHEN SWITCHING TO PROGMEM BACKGROUND AND ENTITY POSITION ONLY
-    if (state->grid[pos.y][pos.x].getEntity() != ENT_EMPTY) {
-        return false; // Not walkable if there is an entity
-    }
-    // In the original game, ghosts can walk on the same cell,
-    // this will be fix when we will switch to entity position only and not grid anymore.
 
     return true; // Walkable if it's not a wall and there is no entity
 };

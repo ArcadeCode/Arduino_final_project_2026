@@ -1,20 +1,18 @@
 #include "game.hpp"
 
 Game::Game()
-    : blueGhost(&this->state, GP_BLUE),
-      redGhost(&this->state, GP_RED),
-      pinkGhost(&this->state, GP_PINK),
-      orangeGhost(&this->state, GP_ORANGE)
+    : ghosts{
+        Ghost(&this->state, GP_RED),
+        Ghost(&this->state, GP_PINK),
+        Ghost(&this->state, GP_BLUE),
+        Ghost(&this->state, GP_ORANGE)
+    }
 {};
 
 Game::~Game() = default;
 
 void Game::start() {
-    // Direct in-place reset of the existing heap-allocated GameState, avoiding
-    // a 1008 bytes stack-allocated temporary that would cause a stack overflow.
-    // thank C++ for that !
     this->state.tick = 0;
-    memset(this->state.grid, 0, sizeof(this->state.grid));
 
     this->pacmanPosition = {20, 20}; // Dummy position for pacman, we will change it in loadLevel() with the real position of pacman.
     this->pacmanFacing = EF_WEST; // Dummy facing for pacman, can be changed in loadLevel() with the real facing of pacman.
@@ -23,30 +21,35 @@ void Game::start() {
     // Initialize ghosts is done in the constructor due to presence of consts in them.
     // Initializing ghosts facing to dummy value based on the official first level, can be changed in loadLevel() with the real starting facing of each ghost.
     // TODO:: Implement starting facing for ghosts in the editor.
-    this->blueGhost.setFacing(EF_NORTH);
-    this->redGhost.setFacing(EF_WEST);
-    this->pinkGhost.setFacing(EF_SOUTH);
-    this->orangeGhost.setFacing(EF_WEST);
+    this->ghosts[0].setFacing(EF_WEST);  // Red
+    this->ghosts[1].setFacing(EF_SOUTH); // Pink
+    this->ghosts[2].setFacing(EF_NORTH); // Blue
+    this->ghosts[3].setFacing(EF_WEST);  // Orange
 };
 
 GameState& Game::step() {
     this->state.tick++;
 
-    // Share entities positions to the global state for easier access to ghosts AI movement, instead of searching the grid for them.
-    this->state.pacmanPosition      = this->pacmanPosition;
-    this->state.pacmanFacing        = this->pacmanFacing;
-    this->state.blueGhostPosition   = this->blueGhost.getPosition();
-    this->state.redGhostPosition    = this->redGhost.getPosition();
-    this->state.pinkGhostPosition   = this->pinkGhost.getPosition();
-    this->state.orangeGhostPosition = this->orangeGhost.getPosition();
+    // At this point, the level was loaded,
+    // We get current position of entities
+    // from the GameState
+    this->pacmanPosition = this->state.pacmanPosition;
+    this->pacmanFacing = this->state.pacmanFacing;
+
+    for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
+        this->ghosts[i].setPosition(this->state.ghostPositions[i]);
+    }
+    
+    
 
     // Compute Pacman movement based on the current inputs and the grid.
     this->computePacmanPosition();
 
     // Check if pacman eat a dot or an energizer, and update the grid and the remaining dots count.
-    if (this->state.grid[pacmanPosition.y][pacmanPosition.x].getBackground() == BG_GUM
-        || this->state.grid[pacmanPosition.y][pacmanPosition.x].getBackground() == BG_ENERGIZE) {
-        this->state.grid[pacmanPosition.y][pacmanPosition.x].setBackground(BG_EMPTY);
+    if (readLevelBackground(this->state.level, pacmanPosition.x, pacmanPosition.y) == BG_GUM
+        || readLevelBackground(this->state.level, pacmanPosition.x, pacmanPosition.y) == BG_ENERGIZE) {
+        // Update the grid and the remaining dots count
+        writeLevelBackground(this->state.level, pacmanPosition.x, pacmanPosition.y, BG_EMPTY);
         if (this->state.remainingDots > 0) {
             this->state.remainingDots--;
         }
@@ -55,20 +58,21 @@ GameState& Game::step() {
     // Check for win/lose conditions
     if (this->state.remainingDots == 0) {
         // Send WIN_FLAG
-    } else if (this->state.pacmanPosition == this->state.blueGhostPosition
-            || this->state.pacmanPosition == this->state.redGhostPosition
-            || this->state.pacmanPosition == this->state.pinkGhostPosition
-            || this->state.pacmanPosition == this->state.orangeGhostPosition) {
-        // Send LOSE_FLAG
+    } else {
+        for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
+            if (this->ghosts[i].getPosition() == this->pacmanPosition) {
+                // Send LOSE_FLAG
+                break;
+            }
+        }
     }
     
     // Compute new positions for all ghosts
     this->updateGhostModes();
-    this->blueGhost.computeNewPosition();
-    this->redGhost.computeNewPosition();
-    this->pinkGhost.computeNewPosition();
-    this->orangeGhost.computeNewPosition();
-
+    for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
+        this->ghosts[i].computeNewPosition();
+    }
+    
     // In the end return the new state to be printed on the screen
     return this->state;
 };
@@ -102,48 +106,16 @@ void Game::updateGhostModes() {
         // Phase paire = Scatter, phase impaire = Chase
         GhostAiMode newMode = (this->state.modePhase % 2 == 0) ? GM_Scatter : GM_Chase;
 
-        this->blueGhost.setAiMode(newMode);
-        this->redGhost.setAiMode(newMode);
-        this->pinkGhost.setAiMode(newMode);
-        this->orangeGhost.setAiMode(newMode);
+        for (uint8_t i = 0; i < GHOSTS_COUNT; i++)
+        {
+            this->ghosts[i].setAiMode(newMode);
+        }
+        
     }
 }
 
 void Game::registerInputs(inputs &newInputs) {
     this->currentInputs = newInputs;
 };
-
-int Game::moveEntity(CellEntitiesType Entity, uint8_t old_x, uint8_t old_y, uint8_t new_x, uint8_t new_y) {
-    // Try to move an entity, fail if the new cell contain a wall
-    if (this->state.grid[new_y][new_x].getBackground() == BG_WALL) {
-        return 1; // Error, the new position contain a wall.
-    } else if(new_x >= GAME_GRID_X_AXIS_LEN || new_y >= GAME_GRID_Y_AXIS_LEN) {
-        return 2; // Out of the grid
-    } else {
-        this->state.grid[new_y][new_x].setEntity(Entity);
-        this->state.grid[old_y][old_x].setEntity(ENT_EMPTY);
-        switch (Entity) {
-        case ENT_PACMAN:
-            this->pacmanPosition = {new_x, new_y};
-            break;
-        default:
-            break;
-        }
-        return 0;
-    }
-};
-
-// TODO: Move this function to a better place, it's used by ghosts more than game.
-static uint8_t lfsrRandomDirection() {
-    static uint16_t state = 0xACE1;
-
-    uint16_t bit = state & 1;
-    state >>= 1;
-    if (bit != 0) {
-        state ^= 0xB400;
-    }
-
-    return (uint8_t)(state & 0x03);
-}
 
 void Game::computePacmanPosition() {}

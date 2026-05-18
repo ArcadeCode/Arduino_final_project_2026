@@ -143,7 +143,7 @@ void Ghost::computeChaseTarget() {
             
             // 2. RED vector → pivot, and extend it twice to get the final target.
             // Need clamping to the grid size to avoid overflow if pivot is near the border.
-            GridPosition red = this->state->redGhostPosition;
+            GridPosition red = this->state->ghostPositions[0]; // Red is at index 0 in the GhostPositions array.
             int16_t targetX = (int16_t)pivot.x + ((int16_t)pivot.x - (int16_t)red.x);
             int16_t targetY = (int16_t)pivot.y + ((int16_t)pivot.y - (int16_t)red.y);
 

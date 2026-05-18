@@ -57,9 +57,7 @@ void setup() {
     Serial.println(F("Level 0 loaded in GameState"));
 
     Serial.print(F("Memory : "));
-    Serial.println(freeMemory());
-    
-    
+    Serial.println(freeMemory()); 
 
     // 4. Creating a new Screen object
     screen = new Screen(); // Allocation on the heap
@@ -101,11 +99,9 @@ void loop() {
     Serial.println();
 
     // Calling getGhostInformations() for each ghost
-    Serial.println(game->get_blueGhostInformation());
-    Serial.println(game->get_redGhostInformation());
-    Serial.println(game->get_pinkGhostInformation());
-    Serial.println(game->get_orangeGhostInformation());
-
+    for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
+        Serial.println(game->get_ghostInformations(i));
+    }
 
     // 2.2 Cleanup
     Serial.flush();

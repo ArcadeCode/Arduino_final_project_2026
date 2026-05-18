@@ -3,26 +3,22 @@
 #include "types.hpp"
 #include "ghost.hpp"
 
-static uint8_t lfsrRandomDirection();
-
 class Game {
 private:
     GameState state;
     inputs currentInputs;
 
-    // Helpers for computing
-    int moveEntity(CellEntitiesType Entity, uint8_t old_x, uint8_t old_y, uint8_t new_x, uint8_t new_y);
+    // Pacman
     GridPosition pacmanPosition;
     EntityFacing pacmanFacing;
-
-    Ghost blueGhost;
-    Ghost redGhost;
-    Ghost pinkGhost;
-    Ghost orangeGhost;
+    
+    // Ghosts
+    Ghost ghosts[GHOSTS_COUNT]; // 0: Blue, 1: Red, 2: Pink, 3: Orange
 
     void computePacmanPosition();
     // Ghosts positions are directly computed in their class and shared to the global state for easier access to ghosts AI movement, instead of searching the grid for them.
 
+    // Check if the ghosts can exit the ghost house based on their dot threshold and the remaining dots count.
     void updateGhostModes();
 
     public:
@@ -37,10 +33,7 @@ private:
     GridPosition get_pacmanPosition() const { return pacmanPosition; }
     EntityFacing get_pacmanFacing() const { return pacmanFacing; }
 
-    GameState& getState() { return this->state; } // Get the current state without stepping.
+    GameState& getState() { return this->state; } // Get the current state without stepping. (used by levels.hpp)
 
-    char* get_blueGhostInformation() const { return blueGhost.getGhostInformations(); }
-    char* get_redGhostInformation() const { return redGhost.getGhostInformations(); }
-    char* get_pinkGhostInformation() const { return pinkGhost.getGhostInformations(); }
-    char* get_orangeGhostInformation() const { return orangeGhost.getGhostInformations(); }
+    char* get_ghostInformations(uint8_t index) const { return ghosts[index].getGhostInformations(); }
 };
