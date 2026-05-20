@@ -46,10 +46,10 @@ GameState& Game::step() {
     this->computePacmanPosition();
 
     // Check if pacman eat a dot or an energizer, and update the grid and the remaining dots count.
-    if (readLevelBackground(this->state.level, pacmanPosition.x, pacmanPosition.y) == BG_GUM
-        || readLevelBackground(this->state.level, pacmanPosition.x, pacmanPosition.y) == BG_ENERGIZE) {
+    if (readLevelBackground(this->state, pacmanPosition.x, pacmanPosition.y) == BG_GUM
+        || readLevelBackground(this->state, pacmanPosition.x, pacmanPosition.y) == BG_ENERGIZE) {
         // Update the grid and the remaining dots count
-        writeLevelBackground(this->state.level, pacmanPosition.x, pacmanPosition.y, BG_EMPTY);
+        writeLevelBackground(this->state, pacmanPosition.x, pacmanPosition.y, BG_EMPTY);
         if (this->state.remainingDots > 0) {
             this->state.remainingDots--;
         }
@@ -71,6 +71,7 @@ GameState& Game::step() {
     this->updateGhostModes();
     for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
         this->ghosts[i].computeNewPosition();
+        this->state.ghostPositions[i] = this->ghosts[i].getPosition(); // Update the global state with the new ghost positions for easier access to them in the next step.
     }
     
     // In the end return the new state to be printed on the screen

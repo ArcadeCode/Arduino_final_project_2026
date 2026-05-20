@@ -24,6 +24,13 @@ void loadLevel(GameState& state, uint8_t level) {
         };
     }
 
+    // Copy current level background from PROGMEM to RAM for easier access during the game.
+    const uint8_t* src = (const uint8_t*)pgm_read_ptr(&LEVELS_PARAMETERS[level].background);
+    for (uint8_t y = 0; y < GAME_GRID_Y_AXIS_LEN; y++) {
+        for (uint8_t x = 0; x < GAME_GRID_X_AXIS_LEN / 4; x++) {
+            state.levelBackground[y][x] = pgm_read_byte(&src[y * (GAME_GRID_X_AXIS_LEN / 4) + x]);   
+        }
+    }
     state.totalDots = pgm_read_word(&LEVELS_PARAMETERS[level].totalDots);
     state.remainingDots = state.totalDots;
 }

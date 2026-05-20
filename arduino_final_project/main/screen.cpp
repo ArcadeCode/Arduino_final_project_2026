@@ -30,10 +30,7 @@ void Screen::print_frame(GameState &state) {
         for (uint8_t x = 0; x < GAME_GRID_X_AXIS_LEN; x++) {
 
             serial_s[x + 1] =
-                cellBackgroundToChar(
-                    // TODO: Not hardcoding the level background, we should read it from the current level in the GameState.
-                    readLevelBackground(LEVEL_0_BG, x, y)
-                );
+                cellBackgroundToChar(readLevelBackground(state, x, y));
 
             if (state.ghostPositions[0] == GridPosition(x, y)) {
                 serial_s[x + 1] = 'R';

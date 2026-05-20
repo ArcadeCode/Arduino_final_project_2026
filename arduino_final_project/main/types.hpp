@@ -31,22 +31,6 @@ struct LevelParams {
     // Add more parameters here if needed (e.g., fruit spawn positions and timings)
 };
 
-// Macro to access a field of the LEVELS_PARAMETERS array in PROGMEM.
-#define LEVEL_PARAMS_FIELD(level, field) \
-    pgm_read_byte(&(LEVELS_PARAMETERS[level].field))
-
-// Macro to access an array of positions (e.g., ghostStarts)
-#define LEVEL_PARAMS_POSITION(level, index, field) \
-    pgm_read_byte(&(LEVELS_PARAMETERS[level].ghostStarts[index].field))
-
-// Macro to access the background of a level
-#define LEVEL_BG_READ(level, x, y) \
-    ({ \
-        const uint8_t* bg_ptr = LEVELS_PARAMETERS[level].background; \
-        uint8_t packed = pgm_read_byte(&bg_ptr[y * (GAME_GRID_X_AXIS_LEN / 4) + (x >> 2)]); \
-        (CellBackgroundType)((packed >> ((x & 0x03) << 1)) & 0x03); \
-    })
-
 enum EntityFacing {
     EF_NORTH,
     EF_SOUTH,
@@ -166,41 +150,6 @@ static const uint16_t MODE_DURATIONS[3][8] PROGMEM = {
 };
 
 /**
- * @brief Read a cell background from a PROGMEM level array.
- *
- * @param level_bg  Pointer to a LEVEL_x_BG array (e.g. LEVEL_0_BG).
- * // TODO: Replace level_bg for level index and read the background from the current level.
- * The real ptr to level will be store in level.hpp.
- * @param x         Column (0..GAME_GRID_X_AXIS_LEN-1).
- * @param y         Row    (0..GAME_GRID_Y_AXIS_LEN-1).
- * @return CellBackgroundType
- */
-inline CellBackgroundType readLevelBackground(
-    const uint8_t level_bg[][GAME_GRID_X_AXIS_LEN / 4],
-    uint8_t x, uint8_t y)
-{
-    uint8_t packed = pgm_read_byte(&level_bg[y][x >> 2]);
-    return (CellBackgroundType)((packed >> ((x & 0x03) << 1)) & 0x03);
-}
-
-/**
- * @brief Write a cell background to a PROGMEM level array.
- *
- * @param level_bg  Pointer to a LEVEL_x_BG array (e.g. LEVEL_0_BG).
- * @param x         Column (0..GAME_GRID_X_AXIS_LEN-1).
- * @param y         Row    (0..GAME_GRID_Y_AXIS_LEN-1).
- * @return nothing
- */
-inline void writeLevelBackground(
-    uint8_t level_bg[][GAME_GRID_X_AXIS_LEN / 4],
-    uint8_t x, uint8_t y, CellBackgroundType bg)
-{
-    uint8_t &packed = level_bg[y][x >> 2];
-    uint8_t mask = 0x03 << ((x & 0x03) << 1);
-    packed = (packed & ~mask) | ((bg & 0x03) << ((x & 0x03) << 1));
-}
-
-/**
  * @brief The GameState struct holds all the information about the current state of the game.
  * It is used by the Game class to update the game state and by the Ghosts to compute their targets and movements.
  * Due to memory limitations, we store the background in PROGMEM and we only keep the positions of entities in the GameState.
@@ -214,9 +163,10 @@ struct GameState {
     
     // Variables set by levels.hpp when loading a level, used for timing and AI mode switching.
     uint8_t level; // Current level, set by levels.hpp when loading a level, used for timing and AI mode switching.
+    uint8_t levelBackground[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN / 4]; // Local copy of the level background, initialized from PROGMEM when loading a level
     uint8_t modePhase; // Index in the current mode phase, used for timing and AI mode switching.
-    uint8_t totalDots;
-    uint8_t remainingDots;
+    uint16_t totalDots;
+    uint16_t remainingDots;
     
     // Centralized positions of entities for easier access to Ghosts AI movement, instead of searching the grid for them.
     GridPosition pacmanPosition;
@@ -225,6 +175,39 @@ struct GameState {
 
     GameState() : tick(0), level(0),modePhase(0),pacmanPosition({0, 0}), ghostPositions{{0, 0}, {0, 0}, {0, 0}, {0, 0}}, pacmanFacing(EF_NORTH), totalDots(0), remainingDots(0) {}
 };
+
+/**
+ * @brief Read a cell background from a PROGMEM level array.
+ *
+ * @param level_bg  Pointer to a LEVEL_x_BG array (e.g. LEVEL_0_BG).
+ * // TODO: Replace level_bg for level index and read the background from the current level.
+ * The real ptr to level will be store in level.hpp.
+ * @param x         Column (0..GAME_GRID_X_AXIS_LEN-1).
+ * @param y         Row    (0..GAME_GRID_Y_AXIS_LEN-1).
+ * @return CellBackgroundType
+ */
+inline CellBackgroundType readLevelBackground(const GameState& state, uint8_t x, uint8_t y)
+{
+    uint8_t packed = state.levelBackground[y][x >> 2];
+    return (CellBackgroundType)((packed >> ((x & 0x03) << 1)) & 0x03);
+}
+
+/**
+ * @brief Write a cell background to a PROGMEM level array.
+ *
+ * @param level_bg  Pointer to a LEVEL_x_BG array (e.g. LEVEL_0_BG).
+ * @param x         Column (0..GAME_GRID_X_AXIS_LEN-1).
+ * @param y         Row    (0..GAME_GRID_Y_AXIS_LEN-1).
+ * @return nothing
+ */
+inline void writeLevelBackground(
+    GameState& state,
+    uint8_t x, uint8_t y, CellBackgroundType bg)
+{
+    uint8_t &packed = state.levelBackground[y][x >> 2];
+    uint8_t mask = 0x03 << ((x & 0x03) << 1);
+    packed = (packed & ~mask) | ((bg & 0x03) << ((x & 0x03) << 1));
+}
 
 /**
  * @brief Get all entities on a given cell.
@@ -297,7 +280,7 @@ inline bool isWalkable(const GameState* state, GridPosition pos) {
     }
     // No need to check for pos < 0 because pos is unsigned (uint8_t)
     
-    if (readLevelBackground(state->level, pos.x, pos.y) == BG_WALL) {
+    if (readLevelBackground(*state, pos.x, pos.y) == BG_WALL) {
         return false; // Not walkable if it's a wall
     }
 
