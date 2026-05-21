@@ -6,7 +6,6 @@
 class Game {
 private:
     GameState state;
-    inputs currentInputs;
 
     // Pacman
     GridPosition pacmanPosition;
@@ -27,7 +26,6 @@ private:
 
     void start(); /* Start a new game */
     GameState& step(); /* Step from one new frame */
-    void registerInputs(inputs &newInputs);
 
     // Getters for entities positions
     GridPosition get_pacmanPosition() const { return pacmanPosition; }

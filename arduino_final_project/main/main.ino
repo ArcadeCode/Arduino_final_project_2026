@@ -5,6 +5,8 @@
 
 #include <Arduino.h> // Only for the freeMemory function
 
+static const int RANDOM_NOISE_PIN = A5;
+
 /**
  * Not to complicated function who determine the heap
  * size in bytes using runtime variables. It is used
@@ -34,11 +36,12 @@ arduino the memory will be cleared.
 */
 Game* game = nullptr;
 Screen* screen = nullptr;
+Inputs inputs = Inputs();
 
 void setup() {
     // 0. Starting the Serial Monitor & set a random seed
     Serial.begin(19200);
-    randomSeed(analogRead(A0)); // True randomness using electric noise on A0 pin;
+    randomSeed(analogRead(RANDOM_NOISE_PIN)); // True randomness using electric noise on A0 pin;
     Serial.println(F("BOOT OK"));
 
     // 1. Creating a new Game object
@@ -103,12 +106,14 @@ void loop() {
         Serial.println(game->get_ghostInformations(i));
     }
 
+    // Print inputs debug informations
+    Serial.println(inputs.get_informations());
+
     // 2.2 Cleanup
     Serial.flush();
     delay(500);
 
     /// INPUT REGISTERING ///
-    // We register his inputs directly into the Game object
-    inputs newInputs = inputs(); // Default constructor will retrieve the current inputs state
-    game->registerInputs(newInputs);
+    // We register player inputs and edit the GameState.pacmanFacing
+    inputs.update();
 }

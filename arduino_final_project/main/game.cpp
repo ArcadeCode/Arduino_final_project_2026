@@ -115,8 +115,18 @@ void Game::updateGhostModes() {
     }
 }
 
-void Game::registerInputs(inputs &newInputs) {
-    this->currentInputs = newInputs;
-};
+void Game::computePacmanPosition() {
+    // At this point, inputs.cpp have updated `GameState.pacmanFacing`
 
-void Game::computePacmanPosition() {}
+    GridPosition neighbor = getNeighbor(this->pacmanPosition, this->get_pacmanFacing());
+    
+    // Check if Pacman can move here
+    if (isWalkable(&this->state, pacmanPosition) == BG_WALL) {
+        // Bump into the wall
+    } else {
+        // Move
+        this->state.pacmanPosition = neighbor;
+        this->pacmanPosition = neighbor;
+    }
+    
+}

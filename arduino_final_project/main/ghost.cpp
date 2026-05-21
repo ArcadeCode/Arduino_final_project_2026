@@ -56,10 +56,10 @@ void Ghost::moveTowardTarget() {
 
     uint16_t bestDist = UINT16_MAX;
     EntityFacing bestDir = this->lastFacing;
+    bool found = false;
 
     for (uint8_t i = 0; i < 4; i++) {
         if (dirs[i] == opposite) continue;
-        
         GridPosition next = getNeighbor(this->position, dirs[i]);
         if (!isWalkable(this->state, next)) continue;
 
@@ -67,9 +67,11 @@ void Ghost::moveTowardTarget() {
         if (dist < bestDist) {
             bestDist = dist;
             bestDir = dirs[i];
+            found = true;
         }
     }
 
+    if (!found) return; // Don't move if no valid direction (should not happen in a well-designed maze)
     this->lastFacing = bestDir;
     this->position = getNeighbor(this->position, bestDir);
 }
