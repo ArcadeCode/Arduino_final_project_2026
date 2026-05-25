@@ -1,0 +1,302 @@
+# editor/converters.py
+# Conversion utilities: grid ↔ ASCII text, C++ PROGMEM (levels.hpp), raw uint8_t array.
+
+import re
+from typing import List, Optional
+
+from .constants import GRID_W, GRID_H
+from .models import BG, ENT, Cell, empty_grid
+from .rules import count_dots
+
+# Number of bytes required to store one row of background data.
+# Each byte packs 4 cells × 2 bits = 8 bits.
+_BYTES_PER_ROW: int = GRID_W // 4  # = 7 for a 28-column grid
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _pack_bg_row(grid: List[List[Cell]], y: int) -> List[str]:
+    """
+    Pack one grid row into _BYTES_PER_ROW hex byte strings.
+
+    4 consecutive cells are packed into one uint8_t (LSB = leftmost cell):
+        byte = bg[x+0] | bg[x+1]<<2 | bg[x+2]<<4 | bg[x+3]<<6
+    """
+    result = []
+    for bx in range(_BYTES_PER_ROW):
+        byte_val = 0
+        for bit in range(4):
+            x = bx * 4 + bit
+            byte_val |= (int(grid[x][y].get_bg()) & 0x03) << (bit * 2)
+        result.append(f"0x{byte_val:02X}")
+    return result
+
+
+# ── C++ PROGMEM export (format v3) ───────────────────────────────────────────
+
+def grid_to_cpp(grid: List[List[Cell]]) -> str:
+    """
+    Convert the editor grid to a levels.hpp C++ snippet (editor export format v3).
+
+    Background bit-packing (unchanged from v2):
+        2 bits per cell, 4 cells per byte, LSB = leftmost cell.
+        One row = 28 cells = 7 bytes.  Full grid = 36 × 7 = 252 bytes in Flash.
+
+    What changed from v2 → v3:
+      - Entity positions are stored in a LevelParams struct (types.hpp) inside
+        the LEVELS_PARAMETERS[] PROGMEM array, not inlined in loadLevel().
+      - ghostStarts[4] order: Red[0], Pink[1], Blue[2], Orange[3].
+      - loadLevel() is only declared here; its definition lives in levels.cpp.
+      - The LEVEL_BG_READ macro is gone; readLevelBackground() in types.hpp
+        reads from state.levelBackground[] which loadLevel() fills from PROGMEM.
+
+    Grid convention: C++ arrays are [y][x]; Python grid is [x][y] — transposed here.
+    """
+
+    # ── Collect entity positions ──────────────────────────────────────────────
+    pacman_pos = None
+    ghost_positions = {
+        ENT.RED_GHOST:    None,
+        ENT.PINK_GHOST:   None,
+        ENT.BLUE_GHOST:   None,
+        ENT.ORANGE_GHOST: None,
+    }
+
+    for y in range(GRID_H):
+        for x in range(GRID_W):
+            ent = grid[x][y].get_ent()
+            if ent == ENT.PACMAN:
+                pacman_pos = (x, y)
+            elif ent in ghost_positions:
+                ghost_positions[ent] = (x, y)
+
+    dots = count_dots(grid)
+
+    def pos_str(pos) -> str:
+        """Format an (x, y) tuple as a C++ GridPosition initializer."""
+        return f"{{{pos[0]}, {pos[1]}}}" if pos else "{0, 0}"
+
+    # Ghost order must match ghostStarts[] in LevelParams: Red, Pink, Blue, Orange
+    ghost_order = [
+        (ENT.RED_GHOST,    "Red"),
+        (ENT.PINK_GHOST,   "Pink"),
+        (ENT.BLUE_GHOST,   "Blue"),
+        (ENT.ORANGE_GHOST, "Orange"),
+    ]
+
+    # ── Build output ──────────────────────────────────────────────────────────
+    lines: List[str] = [
+        "/*",
+        " * levels.hpp — Pac-Man level data and parameters stored in Flash (PROGMEM).",
+        " *",
+        " * =============================================",
+        " * Background layout — format v2",
+        " * =============================================",
+        " * Each cell background needs 2 bits:",
+        " *   BG_EMPTY=0, BG_WALL=1, BG_GUM=2, BG_ENERGIZE=3",
+        " *",
+        " * 4 consecutive cells in the same row are packed into one uint8_t (LSB first):",
+        " *",
+        " *   byte = (bg[x+0] & 0x03)",
+        " *        | (bg[x+1] & 0x03) << 2",
+        " *        | (bg[x+2] & 0x03) << 4",
+        " *        | (bg[x+3] & 0x03) << 6",
+        " *",
+        f" * One row  = {GRID_W} cells = {_BYTES_PER_ROW} bytes.",
+        f" * Full grid = {GRID_H} rows x {_BYTES_PER_ROW} bytes"
+        f" = {GRID_H * _BYTES_PER_ROW} bytes in Flash.",
+        " * (vs 1008 bytes of SRAM used by the previous Cell grid[][] approach)",
+        " *",
+        " * Decoding a single cell — use readLevelBackground() from types.hpp.",
+        " *",
+        " * =============================================",
+        " * Level parameters — static data in PROGMEM",
+        " * =============================================",
+        " * All level parameters are stored in a LevelParams struct (types.hpp)",
+        " * inside the LEVELS_PARAMETERS[] PROGMEM array.",
+        " *",
+        " * LevelParams fields:",
+        " *   - background:     Pointer to LEVEL_X_BG (PROGMEM)",
+        " *   - pacmanStart:    GridPosition {x, y}",
+        " *   - ghostStarts[4]: GridPosition array — Red[0] Pink[1] Blue[2] Orange[3]",
+        " *   - totalDots:      uint16_t (BG_GUM + BG_ENERGIZE count)",
+        " *",
+        " * Access via pgm_read_byte / pgm_read_word / pgm_read_ptr.",
+        " * Example: pgm_read_byte(&LEVELS_PARAMETERS[level].pacmanStart.x)",
+        " *",
+        " * loadLevel() is declared here and defined in levels.cpp.",
+        " *",
+        " * Generated by Pac-Man Level Editor v3.",
+        " */",
+        "",
+        "#pragma once",
+        '#include "types.hpp"',
+        "",
+        "// Total collectible dots (BG_GUM + BG_ENERGIZE) for level 0.",
+        f"#define LEVEL_0_TOTAL_DOTS {dots}u",
+        "",
+        "// Level 0 background — packed 4 cells/byte, indexed [y][x >> 2], LSB = leftmost cell.",
+        f"static const uint8_t LEVEL_0_BG[{GRID_H}][{_BYTES_PER_ROW}] PROGMEM = {{",
+    ]
+
+    for y in range(GRID_H):
+        row_bytes = _pack_bg_row(grid, y)
+        comma = "," if y < GRID_H - 1 else " "
+        lines.append(f"    {{{', '.join(row_bytes)}}}{comma} // y={y:2d}")
+
+    lines += [
+        "};",
+        "",
+        "// Static level parameters stored in PROGMEM to save RAM.",
+        "const LevelParams LEVELS_PARAMETERS[] PROGMEM = {",
+        "    // Level 0",
+        "    {",
+        "        .background = (const uint8_t*)LEVEL_0_BG, // Cast to avoid warnings",
+        f"        .pacmanStart = {pos_str(pacman_pos)},",
+        "        .ghostStarts = {",
+    ]
+
+    for ent, label in ghost_order:
+        lines.append(f"            {pos_str(ghost_positions[ent])}, // {label}")
+
+    lines += [
+        "        },",
+        f"        .totalDots = {dots}",
+        "    }",
+        "};",
+        "",
+        "/**",
+        " * @brief Initialize a GameState for the given level, reading parameters from PROGMEM.",
+        " */",
+        "void loadLevel(GameState& state, uint8_t level);",
+    ]
+
+    return "\n".join(lines) + "\n"
+
+
+# ── Raw uint8_t array export/import ──────────────────────────────────────────
+
+def grid_to_raw_array(grid: List[List[Cell]]) -> str:
+    """
+    Export the full cell data as a flat C++ uint8_t array, indexed [y][x].
+
+    This format stores the complete Cell.data byte (background + entity bits),
+    unlike grid_to_cpp which only stores background bits.
+    Useful for debugging or alternative import pipelines.
+    """
+    lines = [
+        "// Level generated by Pac-Man Level Editor",
+        f"// Size: {GRID_H}×{GRID_W} — indexed [y][x]"
+        f" matching Cell grid[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN]",
+        "",
+        f"const uint8_t level_data[{GRID_H}][{GRID_W}] = {{",
+    ]
+    for y in range(GRID_H):
+        row_vals = ", ".join(f"0x{grid[x][y].data:02X}" for x in range(GRID_W))
+        comma = "," if y < GRID_H - 1 else ""
+        lines.append(f"    {{{row_vals}}}{comma}  // y={y}")
+    lines += [
+        "};",
+        "",
+        "// To load into game state:",
+        "// for (int y = 0; y < GAME_GRID_Y_AXIS_LEN; y++)",
+        "//   for (int x = 0; x < GAME_GRID_X_AXIS_LEN; x++)",
+        "//     state.grid[y][x].data = level_data[y][x];",
+    ]
+    return "\n".join(lines)
+
+
+def raw_array_to_grid(text: str) -> Optional[List[List[Cell]]]:
+    """
+    Parse a raw uint8_t array (produced by grid_to_raw_array) back into a grid.
+
+    The source array is [GRID_H][GRID_W] (outer dimension = y),
+    loaded into the Python grid[x][y] representation.
+    """
+    # Remove C++ line comments to avoid parsing y=N row indices as values.
+    stripped = re.sub(r'//[^\n]*', '', text)
+    # Remove declaration lines that contain stray numbers (dimensions, for-loops…).
+    stripped = re.sub(r'(const\s+\w+.*?=\s*\{|for\s*\(.*?\)|#\w+[^\n]*)', '', stripped)
+    # Extract only hex literals to avoid any stray decimal integers.
+    hex_vals = re.findall(r'0[xX][0-9a-fA-F]+', stripped)
+    vals = [int(v, 16) for v in hex_vals]
+
+    if len(vals) < GRID_W * GRID_H:
+        return None
+
+    grid = empty_grid()
+    idx = 0
+    for y in range(GRID_H):      # outer dimension in C++ = y (row)
+        for x in range(GRID_W):  # inner dimension = x (column)
+            grid[x][y] = Cell(vals[idx])
+            idx += 1
+    return grid
+
+
+# ── ASCII export/import ───────────────────────────────────────────────────────
+
+def grid_to_ascii(grid: List[List[Cell]]) -> str:
+    """
+    Render the grid as an ASCII string.
+    Each text line corresponds to one row (y); each character to one column (x).
+    """
+    rows = [
+        "".join(grid[x][y].to_char() for x in range(GRID_W))
+        for y in range(GRID_H)
+    ]
+    return "\n".join(rows)
+
+
+def ascii_to_grid(text: str) -> Optional[List[List[Cell]]]:
+    """
+    Parse an ASCII string (produced by grid_to_ascii) back into a grid.
+    Each text line = row y; each character = column x.
+    Returns None if the input is empty or cannot be parsed.
+    """
+    char_map = {
+        '#': (BG.WALL,     ENT.EMPTY),
+        '.': (BG.GUM,      ENT.EMPTY),
+        '*': (BG.ENERGIZE, ENT.EMPTY),
+        ' ': (BG.EMPTY,    ENT.EMPTY),
+        'P': (BG.EMPTY,    ENT.PACMAN),
+        'R': (BG.EMPTY,    ENT.RED_GHOST),
+        'B': (BG.EMPTY,    ENT.BLUE_GHOST),
+        'K': (BG.EMPTY,    ENT.PINK_GHOST),
+        'O': (BG.EMPTY,    ENT.ORANGE_GHOST),
+        'F': (BG.EMPTY,    ENT.FRUIT),
+    }
+    lines = text.split('\n')
+    while len(lines) < GRID_H:
+        lines.append('')
+
+    grid = empty_grid()
+    for y, line in enumerate(lines[:GRID_H]):
+        for x, ch in enumerate(line[:GRID_W]):
+            if ch in char_map:
+                bg, ent = char_map[ch]
+                grid[x][y].set_bg(bg)
+                grid[x][y].set_ent(ent)
+    return grid
+
+
+# ── C++ name helpers (used for debugging / future features) ───────────────────
+
+def bg_cpp_name(bg: BG) -> str:
+    return {
+        BG.WALL:     "BG_WALL",
+        BG.GUM:      "BG_GUM",
+        BG.ENERGIZE: "BG_ENERGIZE",
+        BG.EMPTY:    "BG_EMPTY",
+    }[bg]
+
+
+def ent_cpp_name(ent: ENT) -> str:
+    return {
+        ENT.PACMAN:       "ENT_PACMAN",
+        ENT.BLUE_GHOST:   "ENT_BLUE_GHOST",
+        ENT.RED_GHOST:    "ENT_RED_GHOST",
+        ENT.PINK_GHOST:   "ENT_PINK_GHOST",
+        ENT.ORANGE_GHOST: "ENT_ORANGE_GHOST",
+        ENT.FRUIT:        "ENT_FRUIT",
+        ENT.EMPTY:        "ENT_EMPTY",
+    }[ent]
