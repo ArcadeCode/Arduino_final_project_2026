@@ -12,26 +12,34 @@ private:
     EntityFacing pacmanFacing;
     
     // Ghosts
-    Ghost ghosts[GHOSTS_COUNT]; // 0: Blue, 1: Red, 2: Pink, 3: Orange
+    Ghost ghosts[GHOSTS_COUNT]; // 0: Red, 1: Pink, 2: Blue, 3: Orange
 
     void computePacmanPosition();
-    // Ghosts positions are directly computed in their class and shared to the global state for easier access to ghosts AI movement, instead of searching the grid for them.
 
-    // Check if the ghosts can exit the ghost house based on their dot threshold and the remaining dots count.
+    /**
+     * @brief Drive the global Scatter/Chase phase schedule.
+     * Does NOT touch ghosts that are currently in Frightened mode —
+     * those track their own timer inside the Ghost class.
+     */
     void updateGhostModes();
 
-    public:
+    /**
+     * @brief Trigger Frightened mode on all ghosts (called when Pac-Man eats an energizer).
+     */
+    void triggerFrightenedAll();
+
+public:
     Game(/* args */);
     ~Game();
 
-    void start(); /* Start a new game */
-    GameState& step(); /* Step from one new frame */
+    void start();         /* Start / reset a new game */
+    GameState& step();    /* Advance one tick */
 
-    // Getters for entities positions
+    // Getters
     GridPosition get_pacmanPosition() const { return pacmanPosition; }
-    EntityFacing get_pacmanFacing() const { return pacmanFacing; }
-
-    GameState& getState() { return this->state; } // Get the current state without stepping. (used by levels.hpp)
+    EntityFacing get_pacmanFacing()   const { return pacmanFacing; }
+    GameState&   getState()                 { return this->state; }
+    const Ghost* getGhosts() const { return this->ghosts; }
 
     char* get_ghostInformations(uint8_t index) const { return ghosts[index].getGhostInformations(); }
 };

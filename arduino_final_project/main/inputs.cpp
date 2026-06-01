@@ -41,6 +41,8 @@ void Inputs::update() {
     read_joystick();
     
     this->state.pacmanFacing = this->joystickDirection;
+
+    // TODO: Implement start & select buttons
 }
 
 char* Inputs::get_informations() {

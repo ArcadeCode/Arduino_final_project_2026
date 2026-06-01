@@ -156,7 +156,6 @@ static const uint16_t MODE_DURATIONS[3][8] PROGMEM = {
  */
 struct GameState {
     // TODO: Implement a simple Pacman struct.
-    // TODO: Store ghosts in an array.
 
     uint16_t tick; // Tick counter, incremented at each game step, is used for timing and animations.
     unsigned long lastModeChangeMs; // Timestamp of the last mode change, used to determine when to switch modes based on MODE_DURATIONS.

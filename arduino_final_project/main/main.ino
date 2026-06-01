@@ -75,7 +75,8 @@ void loop() {
     GameState& state = game->step();
 
     /// 2. SENDING STATE TO THE OUTPUT SCREEN ///
-    screen->print_frame(state);
+    screen->print_frame(state, game->getGhosts());
+    screen->serial_print_frame(state); // Debug
     
     // 2.1 Debugging informations
     // NOTE: This debug section can consume a lot of ram,

@@ -1,5 +1,7 @@
 #include "game.hpp"
 
+// ─── Constructor / Destructor ─────────────────────────────────────────────────
+
 Game::Game()
     : ghosts{
         Ghost(&this->state, GP_RED),
@@ -7,126 +9,136 @@ Game::Game()
         Ghost(&this->state, GP_BLUE),
         Ghost(&this->state, GP_ORANGE)
     }
-{};
+{}
 
 Game::~Game() = default;
+
+// ─── start() ─────────────────────────────────────────────────────────────────
 
 void Game::start() {
     this->state.tick = 0;
 
-    this->pacmanPosition = {20, 20}; // Dummy position for pacman, we will change it in loadLevel() with the real position of pacman.
-    this->pacmanFacing = EF_WEST; // Dummy facing for pacman, can be changed in loadLevel() with the real facing of pacman.
-    // TODO:: Implement starting facing for pacman in the editor.
+    // Dummy Pac-Man position/facing; overwritten by loadLevel().
+    this->pacmanPosition = {20, 20};
+    this->pacmanFacing   = EF_WEST;
+    // TODO: Implement starting facing for Pac-Man and ghosts in the editor.
 
-    // Initialize ghosts is done in the constructor due to presence of consts in them.
-    // Initializing ghosts facing to dummy value based on the official first level, can be changed in loadLevel() with the real starting facing of each ghost.
-    // TODO:: Implement starting facing for ghosts in the editor.
+    // Initial ghost facings based on the canonical first level layout.
     this->ghosts[0].setFacing(EF_WEST);  // Red
     this->ghosts[1].setFacing(EF_SOUTH); // Pink
     this->ghosts[2].setFacing(EF_NORTH); // Blue
     this->ghosts[3].setFacing(EF_WEST);  // Orange
-};
+}
+
+// ─── step() ──────────────────────────────────────────────────────────────────
 
 GameState& Game::step() {
     this->state.tick++;
 
-    // At this point, the level was loaded,
-    // We get current position of entities
-    // from the GameState
+    // Sync local copies from the shared GameState (inputs may have updated pacmanFacing).
     this->pacmanPosition = this->state.pacmanPosition;
-    this->pacmanFacing = this->state.pacmanFacing;
+    this->pacmanFacing   = this->state.pacmanFacing;
 
     for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
         this->ghosts[i].setPosition(this->state.ghostPositions[i]);
     }
-    
-    
 
-    // Compute Pacman movement based on the current inputs and the grid.
+    // ── Pac-Man movement ──────────────────────────────────────────────────────
     this->computePacmanPosition();
 
-    // Check if pacman eat a dot or an energizer, and update the grid and the remaining dots count.
-    if (readLevelBackground(this->state, pacmanPosition.x, pacmanPosition.y) == BG_GUM
-        || readLevelBackground(this->state, pacmanPosition.x, pacmanPosition.y) == BG_ENERGIZE) {
-        // Update the grid and the remaining dots count
+    // ── Dot / energizer collection ────────────────────────────────────────────
+    CellBackgroundType cell = readLevelBackground(this->state, pacmanPosition.x, pacmanPosition.y);
+
+    if (cell == BG_GUM || cell == BG_ENERGIZE) {
         writeLevelBackground(this->state, pacmanPosition.x, pacmanPosition.y, BG_EMPTY);
         if (this->state.remainingDots > 0) {
             this->state.remainingDots--;
         }
+        // Energizer → trigger Frightened on all ghosts.
+        if (cell == BG_ENERGIZE) {
+            triggerFrightenedAll();
+        }
     }
 
-    // Check for win/lose conditions
+    // ── Win / lose check ──────────────────────────────────────────────────────
     if (this->state.remainingDots == 0) {
-        // Send WIN_FLAG
+        // TODO: Send WIN_FLAG
     } else {
         for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
             if (this->ghosts[i].getPosition() == this->pacmanPosition) {
-                // Send LOSE_FLAG
+                // TODO: Send LOSE_FLAG (or score if ghost is Frightened)
                 break;
             }
         }
     }
-    
-    // Compute new positions for all ghosts
-    this->updateGhostModes();
+
+    // ── Ghost AI ──────────────────────────────────────────────────────────────
+    updateGhostModes();
+
     for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
         this->ghosts[i].computeNewPosition();
-        this->state.ghostPositions[i] = this->ghosts[i].getPosition(); // Update the global state with the new ghost positions for easier access to them in the next step.
+        // Write back the updated position to the shared state.
+        this->state.ghostPositions[i] = this->ghosts[i].getPosition();
     }
-    
-    // In the end return the new state to be printed on the screen
+
     return this->state;
-};
+}
+
+// ─── updateGhostModes() ───────────────────────────────────────────────────────
 
 /**
- * @brief Update the AI mode of all ghosts based on the current level and mode phase, using the predefined durations from PROGMEM.
- * 
- * @note called each tick in Game::step()
+ * Drives the global Scatter ↔ Chase phase schedule from MODE_DURATIONS[].
+ * Ghosts in Frightened mode are left alone — their own timer handles the return.
+ * When a phase transition occurs, Ghost::setAiMode() is called, which internally
+ * stores the new mode as "mode to restore to" if the ghost is currently Frightened.
  */
 void Game::updateGhostModes() {
-    // Combien de temps s'est écoulé depuis le dernier changement de mode ?
     unsigned long elapsed = millis() - this->state.lastModeChangeMs;
 
-    // Quel ligne du tableau utiliser selon le niveau ?
     uint8_t levelIndex = (this->state.level == 1) ? 0 :
                          (this->state.level <= 4) ? 1 : 2;
 
-    // Combien de secondes doit durer la phase actuelle ?
     uint16_t durationSeconds = pgm_read_word(&MODE_DURATIONS[levelIndex][this->state.modePhase]);
 
-    // 0 = Chase indéfinie finale, on ne bascule plus jamais
+    // 0 = final indefinite Chase — never transition again.
     if (durationSeconds == 0) return;
 
     unsigned long durationMs = (unsigned long)durationSeconds * 1000UL;
 
-    // Le temps est écoulé → on change de mode
     if (elapsed >= durationMs) {
-        this->state.lastModeChangeMs = millis(); // Réinitialise le chrono
-        this->state.modePhase++;                 // Passe à la phase suivante
+        this->state.lastModeChangeMs = millis();
+        this->state.modePhase++;
 
-        // Phase paire = Scatter, phase impaire = Chase
+        // Even phase → Scatter, odd phase → Chase.
         GhostAiMode newMode = (this->state.modePhase % 2 == 0) ? GM_Scatter : GM_Chase;
 
-        for (uint8_t i = 0; i < GHOSTS_COUNT; i++)
-        {
+        for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
+            // setAiMode() handles the Frightened guard internally.
             this->ghosts[i].setAiMode(newMode);
         }
-        
     }
 }
 
-void Game::computePacmanPosition() {
-    // At this point, inputs.cpp have updated `GameState.pacmanFacing`
+// ─── triggerFrightenedAll() ───────────────────────────────────────────────────
 
-    GridPosition neighbor = getNeighbor(this->pacmanPosition, this->get_pacmanFacing());
-    
-    // Check if Pacman can move here
-    if (isWalkable(&this->state, pacmanPosition) == BG_WALL) {
-        // Bump into the wall
-    } else {
-        // Move
-        this->state.pacmanPosition = neighbor;
-        this->pacmanPosition = neighbor;
+void Game::triggerFrightenedAll() {
+    for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
+        this->ghosts[i].triggerFrightened();
     }
-    
+}
+
+// ─── computePacmanPosition() ─────────────────────────────────────────────────
+
+void Game::computePacmanPosition() {
+    // inputs.cpp has already written the desired direction into state.pacmanFacing.
+    GridPosition neighbor = getNeighbor(this->pacmanPosition, this->get_pacmanFacing());
+
+    // Check the NEIGHBOR tile, not the current position.
+    if (!isWalkable(&this->state, neighbor)) {
+        // Bump — stay in place.
+        return;
+    }
+
+    this->state.pacmanPosition = neighbor;
+    this->pacmanPosition       = neighbor;
 }

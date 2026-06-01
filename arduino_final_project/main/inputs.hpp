@@ -3,7 +3,7 @@
 
 static const float JOYSTICK_DEADZONE = 0.2f; // Deadzone threshold for joystick input
 static const int JOYSTICK_MAX_VALUE = 512; // Maximum value for joystick axis (assuming 10-bit ADC centered at 512)
-// NOTE: A0 is already use in main.ino for random noise reading.
+// NOTE: A5 is already use in main.ino for random noise reading.
 static const int SELECT_BUTTON_PIN = A0;
 static const int START_BUTTON_PIN = A1;
 static const int JOYSTICK_X_PIN = A2;
