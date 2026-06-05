@@ -5,6 +5,8 @@
 
 #include <Arduino.h> // Only for the freeMemory function
 
+#define DEBUG 1 // Set to 1 to enable debug output in the Serial Monitor, 0 to disable
+
 static const int RANDOM_NOISE_PIN = A5;
 
 /**
@@ -36,7 +38,7 @@ arduino the memory will be cleared.
 */
 Game* game = nullptr;
 Screen* screen = nullptr;
-Inputs inputs = Inputs();
+Inputs inputs = Inputs(nullptr);
 
 void setup() {
     // 0. Starting the Serial Monitor & set a random seed
@@ -51,6 +53,8 @@ void setup() {
     Serial.print(F("Memory : "));
     Serial.println(freeMemory());
 
+    // 5. Creating a new Inputs object
+    inputs.attributeGameState(game->getState());
     // 4. Constructing the Game object with default values
     game->start(); // Construct GameState 0 and put dummy values in each entities positions
     Serial.println(F("Game started"));
@@ -68,6 +72,9 @@ void setup() {
 
     Serial.print(F("Memory : "));
     Serial.println(freeMemory());
+
+    
+
 }
 
 void loop() {
@@ -81,6 +88,7 @@ void loop() {
     // 2.1 Debugging informations
     // NOTE: This debug section can consume a lot of ram,
     // there was a lot of stack overflow error from here.
+    #if DEBUG
     Serial.print(F("Tick: "));
     Serial.print(state.tick);
     Serial.print(F(" | RAM: "));
@@ -109,6 +117,7 @@ void loop() {
 
     // Print inputs debug informations
     Serial.println(inputs.get_informations());
+    #endif
 
     // 2.2 Cleanup
     Serial.flush();
