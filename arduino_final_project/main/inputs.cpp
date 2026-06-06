@@ -74,9 +74,19 @@ void Inputs::update() {
 
 char* Inputs::get_informations() {
     static char debugString[50];
-    snprintf(debugString, sizeof(debugString), "Start: %s, Select: %s, Joystick: %d",
+    const char* directionStr = "";
+
+    switch (this->joystickDirection) {
+        case EF_NORTH: directionStr = "North"; break;
+        case EF_SOUTH: directionStr = "South"; break;
+        case EF_EAST:  directionStr = "East";  break;
+        case EF_WEST:  directionStr = "West";  break;
+        default:       directionStr = "Unknown";
+    }
+
+    snprintf(debugString, sizeof(debugString), "Start: %s, Select: %s, Joystick: %s",
              this->start_is_pressed ? "Pressed" : "Released",
              this->select_is_pressed ? "Pressed" : "Released",
-             this->joystickDirection);
+             directionStr);
     return debugString;
 }

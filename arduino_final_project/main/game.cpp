@@ -62,11 +62,11 @@ GameState& Game::step() {
 
     // ── Win / lose check ──────────────────────────────────────────────────────
     if (this->state.remainingDots == 0) {
-        // TODO: Send WIN_FLAG
+        this->state.isWin = true; // Read by the game loop to step to the next level.
     } else {
         for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
             if (this->ghosts[i].getPosition() == this->pacmanPosition) {
-                // TODO: Send LOSE_FLAG (or score if ghost is Frightened)
+                this->state.isGameOver = true; // Read by the game loop to reset the current level.
                 break;
             }
         }

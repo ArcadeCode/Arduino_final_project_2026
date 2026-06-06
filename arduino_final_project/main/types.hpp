@@ -160,6 +160,13 @@ struct GameState {
     uint16_t tick; // Tick counter, incremented at each game step, is used for timing and animations.
     unsigned long lastModeChangeMs; // Timestamp of the last mode change, used to determine when to switch modes based on MODE_DURATIONS.
     
+    // Win/lose conditions
+
+    // This variables are read by the game loop to determine if the game is over and if the player has won or lost.
+    // When a isWin is true, we step to the next level, when isGameOver is true, we reset the current level.
+    bool isGameOver; // True if Pacman is caught by a ghost or if time runs out, false otherwise.
+    bool isWin; // True if Pacman has eaten all the dots, false otherwise.
+
     // Variables set by levels.hpp when loading a level, used for timing and AI mode switching.
     uint8_t level; // Current level, set by levels.hpp when loading a level, used for timing and AI mode switching.
     uint8_t levelBackground[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN / 4]; // Local copy of the level background, initialized from PROGMEM when loading a level
@@ -172,7 +179,7 @@ struct GameState {
     EntityFacing pacmanFacing;
     GridPosition ghostPositions[GHOSTS_COUNT]; // 0: Red, 1: Pink, 2: Blue, 3: Orange
 
-    GameState() : tick(0), level(0),modePhase(0),pacmanPosition({0, 0}), ghostPositions{{0, 0}, {0, 0}, {0, 0}, {0, 0}}, pacmanFacing(EF_NORTH), totalDots(0), remainingDots(0) {}
+    GameState() : tick(0), lastModeChangeMs(0), isGameOver(false), isWin(false), level(0), modePhase(0), pacmanPosition({0, 0}), ghostPositions{{0, 0}, {0, 0}, {0, 0}, {0, 0}}, pacmanFacing(EF_NORTH), totalDots(0), remainingDots(0) {}
 };
 
 /**

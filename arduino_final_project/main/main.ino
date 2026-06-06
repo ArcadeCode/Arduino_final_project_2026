@@ -27,6 +27,7 @@ int freeMemory() {
     }
     return free_memory;
 }
+
 /*
 We done that for future heap allocation in setup()
 Note: We will allocate on the heap this objects
@@ -36,9 +37,12 @@ two variables will never be stopping being used
 so no need to free, when reset or unplugging the
 arduino the memory will be cleared.
 */
-Game* game = nullptr;
-Screen* screen = nullptr;
-Inputs inputs = Inputs(nullptr);
+Game*      game   = nullptr;
+GameState* state  = nullptr; // Pointeur global — déréférencé partout avec * ou ->
+Screen*    screen = nullptr;
+Inputs     inputs = Inputs(nullptr);
+
+void gameLoop(); // Forward declaration nécessaire dans les .ino
 
 void setup() {
     // 0. Starting the Serial Monitor & set a random seed
@@ -49,22 +53,26 @@ void setup() {
     // 1. Creating a new Game object
     game = new Game(); // Allocation on the heap
     Serial.println(F("Game allocated"));
-    
+
     Serial.print(F("Memory : "));
     Serial.println(freeMemory());
 
+    // On pointe vers le state interne du Game, une fois pour toutes
+    state = &game->getState();
+
     // 5. Creating a new Inputs object
-    inputs.attributeGameState(game->getState());
+    inputs.attributeGameState(*state);
+
     // 4. Constructing the Game object with default values
     game->start(); // Construct GameState 0 and put dummy values in each entities positions
     Serial.println(F("Game started"));
-    
+
     // 3. Loading the default level
-    loadLevel(game->getState(), 0); // Load debug level directly in the global state to save memory and avoid stack overflow from loading a level in Game::start().
+    loadLevel(*state, 0); // Load debug level directly in the global state to save memory and avoid stack overflow from loading a level in Game::start().
     Serial.println(F("Level 0 loaded in GameState"));
 
     Serial.print(F("Memory : "));
-    Serial.println(freeMemory()); 
+    Serial.println(freeMemory());
 
     // 4. Creating a new Screen object
     screen = new Screen(); // Allocation on the heap
@@ -72,34 +80,47 @@ void setup() {
 
     Serial.print(F("Memory : "));
     Serial.println(freeMemory());
-
-    
-
 }
 
 void loop() {
+    gameLoop();
+
+    if (state->isWin) {
+        Serial.println(F("LEVEL COMPLETE!"));
+        loadLevel(*state, state->level + 1);
+        game->start();
+    } else if (state->isGameOver) {
+        Serial.println(F("GAME OVER!"));
+        loadLevel(*state, state->level);
+        game->start();
+    }
+}
+
+void gameLoop() {
     /// 1. CALCULATING NEW GAME STATE ///
-    GameState& state = game->step();
+    // step() retourne une GameState& — on l'utilise comme ref locale,
+    // pas besoin de réassigner state (il pointe déjà sur le même objet)
+    GameState& s = game->step();
 
     /// 2. SENDING STATE TO THE OUTPUT SCREEN ///
-    screen->print_frame(state, game->getGhosts());
-    screen->serial_print_frame(state); // Debug
-    
+    screen->print_frame(s, game->getGhosts());
+    screen->serial_print_frame(s); // Debug
+
     // 2.1 Debugging informations
     // NOTE: This debug section can consume a lot of ram,
     // there was a lot of stack overflow error from here.
     #if DEBUG
     Serial.print(F("Tick: "));
-    Serial.print(state.tick);
+    Serial.print(s.tick);
     Serial.print(F(" | RAM: "));
     Serial.print(freeMemory());
     Serial.println(F(" bytes"));
 
     // Print the remaining dots count
     Serial.print(F("Remaining dots: "));
-    Serial.print(state.remainingDots);
+    Serial.print(s.remainingDots);
     Serial.print(F("/"));
-    Serial.println(state.totalDots);
+    Serial.println(s.totalDots);
 
     // Print pacman position & facing
     Serial.print(F("Pacman (x, y): "));
