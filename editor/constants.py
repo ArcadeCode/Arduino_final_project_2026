@@ -17,3 +17,7 @@ MAX_DOTS          = 255  # Maximum collectible cells (BG_GUM + BG_ENERGIZE) per 
 MAX_GHOSTS        = 4    # One per personality: Red, Pink, Blue, Orange.
 MAX_PACMAN        = 1    # Exactly one Pac-Man spawn point.
 MAX_FRUIT         = 1    # At most one fruit spawn point.
+
+# ── Level set rules (Phase 3) ────────────────────────────────────────────────
+MAX_LEVELS        = 10   # Maximum levels per level set (.levels.json).
+                         # Fits in a uint8_t index and keeps Flash usage reasonable.

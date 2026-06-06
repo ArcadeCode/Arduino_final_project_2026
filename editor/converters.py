@@ -2,11 +2,14 @@
 # Conversion utilities: grid ↔ ASCII text, C++ PROGMEM (levels.hpp), raw uint8_t array.
 
 import re
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from .constants import GRID_W, GRID_H
 from .models import BG, ENT, Cell, empty_grid
 from .rules import count_dots
+
+if TYPE_CHECKING:
+    from .levelset import LevelSet
 
 # Number of bytes required to store one row of background data.
 # Each byte packs 4 cells × 2 bits = 8 bits.
@@ -34,26 +37,8 @@ def _pack_bg_row(grid: List[List[Cell]], y: int) -> List[str]:
 
 # ── C++ PROGMEM export (format v3) ───────────────────────────────────────────
 
-def grid_to_cpp(grid: List[List[Cell]]) -> str:
-    """
-    Convert the editor grid to a levels.hpp C++ snippet (editor export format v3).
-
-    Background bit-packing (unchanged from v2):
-        2 bits per cell, 4 cells per byte, LSB = leftmost cell.
-        One row = 28 cells = 7 bytes.  Full grid = 36 × 7 = 252 bytes in Flash.
-
-    What changed from v2 → v3:
-      - Entity positions are stored in a LevelParams struct (types.hpp) inside
-        the LEVELS_PARAMETERS[] PROGMEM array, not inlined in loadLevel().
-      - ghostStarts[4] order: Red[0], Pink[1], Blue[2], Orange[3].
-      - loadLevel() is only declared here; its definition lives in levels.cpp.
-      - The LEVEL_BG_READ macro is gone; readLevelBackground() in types.hpp
-        reads from state.levelBackground[] which loadLevel() fills from PROGMEM.
-
-    Grid convention: C++ arrays are [y][x]; Python grid is [x][y] — transposed here.
-    """
-
-    # ── Collect entity positions ──────────────────────────────────────────────
+def _collect_entities(grid: List[List[Cell]]):
+    """Return (pacman_pos, ghost_positions) for a grid."""
     pacman_pos = None
     ghost_positions = {
         ENT.RED_GHOST:    None,
@@ -61,7 +46,6 @@ def grid_to_cpp(grid: List[List[Cell]]) -> str:
         ENT.BLUE_GHOST:   None,
         ENT.ORANGE_GHOST: None,
     }
-
     for y in range(GRID_H):
         for x in range(GRID_W):
             ent = grid[x][y].get_ent()
@@ -69,25 +53,42 @@ def grid_to_cpp(grid: List[List[Cell]]) -> str:
                 pacman_pos = (x, y)
             elif ent in ghost_positions:
                 ghost_positions[ent] = (x, y)
+    return pacman_pos, ghost_positions
 
-    dots = count_dots(grid)
 
-    def pos_str(pos) -> str:
-        """Format an (x, y) tuple as a C++ GridPosition initializer."""
-        return f"{{{pos[0]}, {pos[1]}}}" if pos else "{0, 0}"
+def _pos_str(pos) -> str:
+    """Format an (x, y) tuple as a C++ GridPosition initializer."""
+    return f"{{{pos[0]}, {pos[1]}}}" if pos else "{0, 0}"
 
-    # Ghost order must match ghostStarts[] in LevelParams: Red, Pink, Blue, Orange
-    ghost_order = [
-        (ENT.RED_GHOST,    "Red"),
-        (ENT.PINK_GHOST,   "Pink"),
-        (ENT.BLUE_GHOST,   "Blue"),
-        (ENT.ORANGE_GHOST, "Orange"),
-    ]
 
-    # ── Build output ──────────────────────────────────────────────────────────
+_GHOST_ORDER: List[Tuple] = [
+    (ENT.RED_GHOST,    "Red"),
+    (ENT.PINK_GHOST,   "Pink"),
+    (ENT.BLUE_GHOST,   "Blue"),
+    (ENT.ORANGE_GHOST, "Orange"),
+]
+
+
+def levelset_to_cpp(levelset: "LevelSet") -> str:
+    """
+    Convert a full LevelSet to a levels.hpp C++ file (editor export format v3).
+
+    Generates one LEVEL_N_BG[] array per level, then a single LEVELS_PARAMETERS[]
+    PROGMEM array containing all LevelParams structs, and the loadLevel() declaration.
+
+    Background bit-packing (unchanged from v2):
+        2 bits per cell, 4 cells per byte, LSB = leftmost cell.
+        One row = 28 cells = 7 bytes.  Full grid = 36 × 7 = 252 bytes in Flash.
+
+    Grid convention: C++ arrays are [y][x]; Python grid is [x][y] — transposed here.
+    """
+    n = len(levelset.levels)
+
+    # ── File header ───────────────────────────────────────────────────────────
     lines: List[str] = [
         "/*",
         " * levels.hpp — Pac-Man level data and parameters stored in Flash (PROGMEM).",
+        f" * Level set: {levelset.name}  ({n} level{'s' if n != 1 else ''})",
         " *",
         " * =============================================",
         " * Background layout — format v2",
@@ -103,8 +104,8 @@ def grid_to_cpp(grid: List[List[Cell]]) -> str:
         " *        | (bg[x+3] & 0x03) << 6",
         " *",
         f" * One row  = {GRID_W} cells = {_BYTES_PER_ROW} bytes.",
-        f" * Full grid = {GRID_H} rows x {_BYTES_PER_ROW} bytes"
-        f" = {GRID_H * _BYTES_PER_ROW} bytes in Flash.",
+        f" * Full grid = {GRID_H} rows × {_BYTES_PER_ROW} bytes"
+        f" = {GRID_H * _BYTES_PER_ROW} bytes per level in Flash.",
         " * (vs 1008 bytes of SRAM used by the previous Cell grid[][] approach)",
         " *",
         " * Decoding a single cell — use readLevelBackground() from types.hpp.",
@@ -116,7 +117,7 @@ def grid_to_cpp(grid: List[List[Cell]]) -> str:
         " * inside the LEVELS_PARAMETERS[] PROGMEM array.",
         " *",
         " * LevelParams fields:",
-        " *   - background:     Pointer to LEVEL_X_BG (PROGMEM)",
+        " *   - background:     Pointer to LEVEL_N_BG (PROGMEM)",
         " *   - pacmanStart:    GridPosition {x, y}",
         " *   - ghostStarts[4]: GridPosition array — Red[0] Pink[1] Blue[2] Orange[3]",
         " *   - totalDots:      uint16_t (BG_GUM + BG_ENERGIZE count)",
@@ -126,52 +127,84 @@ def grid_to_cpp(grid: List[List[Cell]]) -> str:
         " *",
         " * loadLevel() is declared here and defined in levels.cpp.",
         " *",
-        " * Generated by Pac-Man Level Editor v3.",
+        f" * Generated by Pac-Man Level Editor v3  ({n} level set).",
         " */",
         "",
         "#pragma once",
         '#include "types.hpp"',
         "",
-        "// Total collectible dots (BG_GUM + BG_ENERGIZE) for level 0.",
-        f"#define LEVEL_0_TOTAL_DOTS {dots}u",
+        f"// Total number of levels in this set.",
+        f"#define LEVEL_COUNT {n}u",
         "",
-        "// Level 0 background — packed 4 cells/byte, indexed [y][x >> 2], LSB = leftmost cell.",
-        f"static const uint8_t LEVEL_0_BG[{GRID_H}][{_BYTES_PER_ROW}] PROGMEM = {{",
     ]
 
-    for y in range(GRID_H):
-        row_bytes = _pack_bg_row(grid, y)
-        comma = "," if y < GRID_H - 1 else " "
-        lines.append(f"    {{{', '.join(row_bytes)}}}{comma} // y={y:2d}")
+    # ── Per-level background arrays ───────────────────────────────────────────
+    for idx, (lname, grid) in enumerate(levelset.levels):
+        dots = count_dots(grid)
+        lines += [
+            f"// ── Level {idx} — {lname} ──────────────────────────────────────────",
+            f"#define LEVEL_{idx}_TOTAL_DOTS {dots}u",
+            "",
+            f"// Level {idx} background — packed 4 cells/byte, indexed [y][x >> 2].",
+            f"static const uint8_t LEVEL_{idx}_BG[{GRID_H}][{_BYTES_PER_ROW}] PROGMEM = {{",
+        ]
+        for y in range(GRID_H):
+            row_bytes = _pack_bg_row(grid, y)
+            comma = "," if y < GRID_H - 1 else " "
+            lines.append(f"    {{{', '.join(row_bytes)}}}{comma} // y={y:2d}")
+        lines += ["};", ""]
 
+    # ── Unified LEVELS_PARAMETERS[] array ─────────────────────────────────────
     lines += [
-        "};",
-        "",
-        "// Static level parameters stored in PROGMEM to save RAM.",
-        "const LevelParams LEVELS_PARAMETERS[] PROGMEM = {",
-        "    // Level 0",
-        "    {",
-        "        .background = (const uint8_t*)LEVEL_0_BG, // Cast to avoid warnings",
-        f"        .pacmanStart = {pos_str(pacman_pos)},",
-        "        .ghostStarts = {",
+        "// Static level parameters for all levels, stored in PROGMEM to save RAM.",
+        "const LevelParams LEVELS_PARAMETERS[LEVEL_COUNT] PROGMEM = {",
     ]
 
-    for ent, label in ghost_order:
-        lines.append(f"            {pos_str(ghost_positions[ent])}, // {label}")
+    for idx, (lname, grid) in enumerate(levelset.levels):
+        pacman_pos, ghost_positions = _collect_entities(grid)
+        dots = count_dots(grid)
+        comma = "," if idx < n - 1 else ""
+        lines += [
+            f"    // Level {idx} — {lname}",
+            "    {",
+            f"        .background = (const uint8_t*)LEVEL_{idx}_BG,",
+            f"        .pacmanStart = {_pos_str(pacman_pos)},",
+            "        .ghostStarts = {",
+        ]
+        for ent, label in _GHOST_ORDER:
+            lines.append(f"            {_pos_str(ghost_positions[ent])}, // {label}")
+        lines += [
+            "        },",
+            f"        .totalDots = {dots}",
+            f"    }}{comma}",
+        ]
 
     lines += [
-        "        },",
-        f"        .totalDots = {dots}",
-        "    }",
         "};",
         "",
         "/**",
         " * @brief Initialize a GameState for the given level, reading parameters from PROGMEM.",
+        " *",
+        f" * @param level  Level index, 0 .. {n - 1}  (LEVEL_COUNT - 1).",
         " */",
         "void loadLevel(GameState& state, uint8_t level);",
     ]
 
     return "\n".join(lines) + "\n"
+
+
+def grid_to_cpp(grid: List[List[Cell]]) -> str:
+    """
+    Single-level convenience wrapper around levelset_to_cpp().
+
+    Kept for backward compatibility with external code and the raw-array
+    export path.  Wraps the grid in an anonymous one-level LevelSet and
+    delegates to levelset_to_cpp().
+    """
+    # Import here to avoid a circular import at module load time.
+    from .levelset import LevelSet
+    ls = LevelSet(name="Level Set", levels=[("Level 0", grid)])
+    return levelset_to_cpp(ls)
 
 
 # ── Raw uint8_t array export/import ──────────────────────────────────────────
