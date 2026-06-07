@@ -32,9 +32,9 @@ void Inputs::read_joystick() {
     float xNorm = static_cast<float>(xValue) / JOYSTICK_MAX_VALUE;
     float yNorm = static_cast<float>(yValue) / JOYSTICK_MAX_VALUE;
 
-    if (sqrt(xNorm * xNorm + yNorm * yNorm) < JOYSTICK_DEADZONE) {
-        return joystickDirection; // No change if within deadzone
-    }
+    //if (sqrt(xNorm * xNorm + yNorm * yNorm) < JOYSTICK_DEADZONE) {
+    //    return joystickDirection; // No change if within deadzone
+    //}
 
     if (abs(xNorm) > abs(yNorm)) {
         joystickDirection = (xNorm > 0) ? EF_EAST : EF_WEST;
@@ -60,10 +60,16 @@ void Inputs::read_joystick() {
 
 void Inputs::update() {
     EntityFacing oldDirection = this->joystickDirection;
+    bool wasStartPressed = this->start_is_pressed;
 
     read_start_button();
     read_select_button();
     read_joystick();
+
+    // Toggle pause on rising edge.
+    if (this->start_is_pressed && !wasStartPressed) {
+        this->state->isPaused = !this->state->isPaused;
+    }
 
     // Lazy update
     if (oldDirection != this->joystickDirection) {

@@ -167,6 +167,8 @@ struct GameState {
     bool isGameOver; // True if Pacman is caught by a ghost or if time runs out, false otherwise.
     bool isWin; // True if Pacman has eaten all the dots, false otherwise.
 
+    bool isPaused; // Handle by Input stop the game loop.
+
     // Variables set by levels.hpp when loading a level, used for timing and AI mode switching.
     uint8_t level; // Current level, set by levels.hpp when loading a level, used for timing and AI mode switching.
     uint8_t levelBackground[GAME_GRID_Y_AXIS_LEN][GAME_GRID_X_AXIS_LEN / 4]; // Local copy of the level background, initialized from PROGMEM when loading a level

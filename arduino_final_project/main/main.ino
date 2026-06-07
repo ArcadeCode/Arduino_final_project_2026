@@ -83,17 +83,23 @@ void setup() {
 }
 
 void loop() {
-    gameLoop();
+    if (!state->isPaused) {
+        gameLoop();
 
-    if (state->isWin) {
-        Serial.println(F("LEVEL COMPLETE!"));
-        loadLevel(*state, state->level + 1);
-        game->start();
-    } else if (state->isGameOver) {
-        Serial.println(F("GAME OVER!"));
-        loadLevel(*state, state->level);
-        game->start();
-    }
+        if (state->isWin) {
+            Serial.println(F("LEVEL COMPLETE!"));
+            loadLevel(*state, state->level + 1);
+            game->start();
+        } else if (state->isGameOver) {
+            Serial.println(F("GAME OVER!"));
+            loadLevel(*state, state->level);
+            game->start();
+        }
+    }  
+
+    /// INPUT REGISTERING ///
+    // We register player inputs and edit the GameState.pacmanFacing
+    inputs.update();
 }
 
 void gameLoop() {
@@ -143,8 +149,4 @@ void gameLoop() {
     // 2.2 Cleanup
     Serial.flush();
     delay(500);
-
-    /// INPUT REGISTERING ///
-    // We register player inputs and edit the GameState.pacmanFacing
-    inputs.update();
 }
