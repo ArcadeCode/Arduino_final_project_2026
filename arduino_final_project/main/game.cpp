@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include "audio.hpp"
 
 // ─── Constructor / Destructor ─────────────────────────────────────────────────
 
@@ -17,6 +18,8 @@ Game::~Game() = default;
 
 void Game::start() {
     this->state.tick = 0;
+    this->state.isWin = false;
+    this->state.isGameOver = false;
 
     // Dummy Pac-Man position/facing; overwritten by loadLevel().
     this->pacmanPosition = {20, 20};
@@ -28,6 +31,8 @@ void Game::start() {
     this->ghosts[1].setFacing(EF_SOUTH); // Pink
     this->ghosts[2].setFacing(EF_NORTH); // Blue
     this->ghosts[3].setFacing(EF_WEST);  // Orange
+
+    AudioEngine::play(SFX_NORMAL_MOVE); // Background music, pacman moving sound.
 }
 
 // ─── step() ──────────────────────────────────────────────────────────────────
@@ -54,19 +59,28 @@ GameState& Game::step() {
         if (this->state.remainingDots > 0) {
             this->state.remainingDots--;
         }
-        // Energizer → trigger Frightened on all ghosts.
         if (cell == BG_ENERGIZE) {
             triggerFrightenedAll();
+            AudioEngine::play(SFX_FRIGHTENED);
+        } else {
+            AudioEngine::play(SFX_EAT_DOT);
         }
     }
 
+
     // ── Win / lose check ──────────────────────────────────────────────────────
     if (this->state.remainingDots == 0) {
-        this->state.isWin = true; // Read by the game loop to step to the next level.
+        AudioEngine::play(SFX_LEVEL_WIN);
+        this->state.isWin = true;
     } else {
         for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
             if (this->ghosts[i].getPosition() == this->pacmanPosition) {
-                this->state.isGameOver = true; // Read by the game loop to reset the current level.
+                if (this->ghosts[i].getMode() == GM_Frightened) {
+                    AudioEngine::play(SFX_EAT_GHOST);
+                } else {
+                    AudioEngine::play(SFX_DEATH);
+                    this->state.isGameOver = true;
+                }
                 break;
             }
         }

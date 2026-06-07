@@ -62,10 +62,14 @@ bool Ghost::updateFrightened() {
 
     unsigned long elapsed = millis() - this->frightenedStartMs;
     if (elapsed >= this->frightenedDurationMs) {
-        // Frightened is over — restore previous mode.
         this->mode = this->modeBeforeFrightened;
+        // Plays the eye retreat sound if no other ghost is Frightened.
+        // Note: we let Game handle it to avoid multiple calls.
+        // Simplified call here, the priority system handles duplicates.
+        AudioEngine::play(SFX_GHOST_RETREAT);
         return false;
     }
+
     return true; // Still frightened.
 }
 

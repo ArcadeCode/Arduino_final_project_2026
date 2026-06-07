@@ -10,6 +10,7 @@ Thank to Night Druid for this guide and Jamey Pittman for his work !
 
 #pragma once
 #include "types.hpp"
+#include "audio.hpp"
 
 // See https://steamcommunity.com/sharedfiles/filedetails/?id=593226813 for more informations about scatter mode target.
 static constexpr GridPosition PINK_SCATTER_MODE_TARGET   = {.x = 2,                    .y = 0};

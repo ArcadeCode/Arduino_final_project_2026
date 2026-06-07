@@ -2,12 +2,13 @@
 #include "inputs.hpp"
 #include "screen.hpp"
 #include "levels.hpp"
+#include "audio.hpp" 
 
 #include <Arduino.h> // Only for the freeMemory function
 
 #define DEBUG 1 // Set to 1 to enable debug output in the Serial Monitor, 0 to disable
 
-static const int RANDOM_NOISE_PIN = A5;
+static const int RANDOM_NOISE_PIN = A5; // Used for randomSeed()
 
 /**
  * Not to complicated function who determine the heap
@@ -63,6 +64,10 @@ void setup() {
     // 5. Creating a new Inputs object
     inputs.attributeGameState(*state);
 
+    // Call AudioEngine
+    AudioEngine::init();
+    AudioEngine::play(SFX_INTRO); // Play intro music.
+
     // 4. Constructing the Game object with default values
     game->start(); // Construct GameState 0 and put dummy values in each entities positions
     Serial.println(F("Game started"));
@@ -88,6 +93,7 @@ void loop() {
     if (state->isWin) {
         Serial.println(F("LEVEL COMPLETE!"));
         loadLevel(*state, state->level + 1);
+        AudioEngine::play(SFX_INTRO); // Replay intro music on new level
         game->start();
     } else if (state->isGameOver) {
         Serial.println(F("GAME OVER!"));
@@ -97,6 +103,7 @@ void loop() {
 }
 
 void gameLoop() {
+    AudioEngine::update(); // Update audio (handle note timing and sequence progression)
     /// 1. CALCULATING NEW GAME STATE ///
     // step() retourne une GameState& — on l'utilise comme ref locale,
     // pas besoin de réassigner state (il pointe déjà sur le même objet)
@@ -142,7 +149,7 @@ void gameLoop() {
 
     // 2.2 Cleanup
     Serial.flush();
-    delay(500);
+    delay(0);
 
     /// INPUT REGISTERING ///
     // We register player inputs and edit the GameState.pacmanFacing
