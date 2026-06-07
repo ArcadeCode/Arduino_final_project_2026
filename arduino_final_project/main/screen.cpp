@@ -43,9 +43,44 @@ Screen::Screen()
     : tft(TFT_CS, TFT_DC, TFT_RST),
       firstFrame(true)
 {
-    tft.begin();
-    tft.setRotation(2); // Portrait, connector at bottom — adjust if needed (0-3).
-    tft.fillScreen(COL_BLACK);
+    // Force hardware SPI initialisation before the display driver starts.
+    // Required on Arduino Uno/Nano : without this, MOSI/SCK may not be
+    // configured as outputs and the ILI9341 never receives valid data.
+    // Configure hardware SPI pins explicitly before SPI.begin().
+    // On Arduino Uno/Nano: MOSI=11, MISO=12, SCK=13.
+    pinMode(MOSI, OUTPUT);
+    pinMode(MISO, INPUT);
+    pinMode(SCK,  OUTPUT);
+    SPI.begin();
+    // Limit SPI clock to 8 MHz — some ILI9341 clones can't handle the default 16 MHz.
+    SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
+    SPI.endTransaction();
+
+    // Manual pin init — ensures CS is LOW and RST pulses before the driver starts.
+    pinMode(TFT_RST, OUTPUT);
+    pinMode(TFT_CS,  OUTPUT);
+    pinMode(TFT_DC,  OUTPUT);
+
+    // Hard reset sequence — longer delays for slow modules.
+    digitalWrite(TFT_CS,  LOW);
+    digitalWrite(TFT_RST, HIGH);
+    delay(50);
+    digitalWrite(TFT_RST, LOW);
+    delay(100);
+    digitalWrite(TFT_RST, HIGH);
+    delay(200);
+
+    tft.begin(8000000); // Explicit 8 MHz SPI clock passed to the driver.
+
+    // Diagnostic SPI : lit le Power Mode register (0x0A).
+    // Valeur attendue : 0x9C ou 0x94  → ILI9341 initialisé correctement.
+    // Valeur 0x00 ou 0xFF             → pas de communication (câblage SPI KO).
+    uint8_t tftId = tft.readcommand8(0x0A);
+    Serial.print(F("TFT Power Mode: 0x"));
+    Serial.println(tftId, HEX);
+
+    tft.setRotation(2);
+    tft.fillScreen(0xF800); // TEST: rouge vif — à remettre en COL_BLACK une fois confirmé
 
     // Initialise caches to "not drawn".
     memset(bgCache, 0xFF, sizeof(bgCache));
@@ -95,35 +130,8 @@ void Screen::drawBgCell(GameState& state, uint8_t x, uint8_t y) {
 // ─── Entity sprites ───────────────────────────────────────────────────────────
 
 /**
- * @brief Draw Pac-Man as a yellow circle with a directional mouth wedge.
- *
- * The "mouth" is two black triangles cut from the circle toward the facing
- * direction.  On 7 px cells this gives a clear directional appearance.
- */
-void Screen::drawPacman(uint8_t x, uint8_t y) {
-    int16_t cx = cellX(x) + CELL_PX / 2;
-    int16_t cy = cellY(y) + CELL_PX / 2;
-    int16_t r  = CELL_PX / 2;
-
-    // Body.
-    tft.fillCircle(cx, cy, r, COL_PACMAN);
-
-    // Mouth wedge — two black triangles pointing in the facing direction.
-    // We use a simple 2-px open wedge; small but visible at CELL_PX = 7.
-    // tip = centre, the two base points are ±45° from the facing axis.
-    int16_t tx = cx, ty = cy; // Triangle tip = Pac-Man centre.
-    int16_t b1x, b1y, b2x, b2y; // Base corners of the wedge.
-
-    switch (/* pacmanFacing from GameState, passed via colour arg trick — */ EF_WEST) {
-        // NOTE: facing is baked in at call site via the overloaded helper below.
-        default: break;
-    }
-    // We actually resolve facing in the wrapper; this body is never reached directly.
-    (void)tx; (void)ty; (void)b1x; (void)b1y; (void)b2x; (void)b2y;
-}
-
-/**
  * @brief Internal: draw Pac-Man with explicit facing.
+ *        Defined first so that Screen::drawPacman() and print_frame() can call it.
  */
 static void drawPacmanFacing(Adafruit_ILI9341& tft, int16_t cx, int16_t cy, int16_t r, EntityFacing facing) {
     tft.fillCircle(cx, cy, r, COL_PACMAN);
@@ -147,6 +155,18 @@ static void drawPacmanFacing(Adafruit_ILI9341& tft, int16_t cx, int16_t cy, int1
                      cx + ox,      cy + oy,
                      cx + ox - px, cy + oy - py,
                      COL_BLACK);
+}
+
+/**
+ * @brief Draw Pac-Man as a yellow circle with a directional mouth wedge.
+ *
+ * Delegates to drawPacmanFacing() with EF_EAST as default.
+ * The actual call in print_frame() passes state.pacmanFacing directly.
+ */
+void Screen::drawPacman(uint8_t x, uint8_t y) {
+    int16_t cx = cellX(x) + CELL_PX / 2;
+    int16_t cy = cellY(y) + CELL_PX / 2;
+    drawPacmanFacing(tft, cx, cy, CELL_PX / 2, EF_EAST);
 }
 
 /**

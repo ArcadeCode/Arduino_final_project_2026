@@ -15,12 +15,14 @@
  *   - 28 columns × 7 px = 196 px  → centred with GRID_OFFSET_X = 22 px
  *   - 31 rows    × 7 px = 217 px  → top margin GRID_OFFSET_Y   =  8 px
  *
- * Pin mapping (default — change SPI_CS / SPI_DC / SPI_RST if needed):
+ * Pin mapping (default — change TFT_CS / TFT_DC / TFT_RST if needed):
  *   TFT_CS  → Arduino pin 10
- *   TFT_DC  → Arduino pin 9
+ *   TFT_DC  → Arduino pin 9   (labelled RS on some boards)
  *   TFT_RST → Arduino pin 8
- *   MOSI    → Arduino pin 11  (hardware SPI)
- *   SCK     → Arduino pin 13  (hardware SPI)
+ *   MOSI    → Arduino pin 11  (hardware SPI — MUST be wired)
+ *   SCK     → Arduino pin 13  (hardware SPI — MUST be wired)
+ *   MISO    → Arduino pin 12  (hardware SPI — wire even if unused for reads)
+ *   LED/BL  → 3.3 V via 100 Ω resistor  (or a PWM pin for brightness control)
  *
  * Colour palette (ILI9341 uses 16-bit RGB565):
  *   Background colours match the classic arcade look as closely as possible.
