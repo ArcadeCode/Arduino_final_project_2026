@@ -65,7 +65,7 @@ GameState& Game::step() {
         this->state.isWin = true; // Read by the game loop to step to the next level.
     } else {
         for (uint8_t i = 0; i < GHOSTS_COUNT; i++) {
-            if (this->ghosts[i].getPosition() == this->pacmanPosition) {
+            if (this->ghosts[i].getPosition() == this->pacmanPosition && this->ghosts[i].getMode() != GM_Frightened) {
                 this->state.isGameOver = true; // Read by the game loop to reset the current level.
                 break;
             }
